@@ -1,16 +1,98 @@
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = process.env.DB_PATH ? path.resolve(__dirname, process.env.DB_PATH) : path.resolve(__dirname, 'cloud.db');
+const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+let db;
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-        initDb();
-    }
-});
+if (DB_TYPE === 'postgres') {
+    // PostgreSQL connection
+    const { Pool } = require('pg');
+    
+    const pool = new Pool({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+    });
+
+    pool.on('connect', () => {
+        console.log('Connected to PostgreSQL database');
+    });
+
+    pool.on('error', (err) => {
+        console.error('Unexpected error on idle client', err);
+    });
+
+    // Wrapper to make PostgreSQL work with SQLite-like syntax
+    db = {
+        run: async (query, params, callback) => {
+            try {
+                // Convert SQLite syntax to PostgreSQL
+                query = query.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY');
+                query = query.replace(/DATETIME DEFAULT CURRENT_TIMESTAMP/g, 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+                query = query.replace(/datetime\('now'\)/g, "NOW()");
+                query = query.replace(/datetime\("now"\)/g, "NOW()");
+                
+                const result = await pool.query(query, params || []);
+                if (callback) {
+                    callback.call({ lastID: result.rows[0]?.id, changes: result.rowCount }, null);
+                }
+                return result;
+            } catch (err) {
+                if (callback) callback.call({ lastID: 0, changes: 0 }, err);
+                else console.error('Query error:', err);
+            }
+        },
+        get: async (query, params, callback) => {
+            try {
+                query = query.replace(/datetime\('now'\)/g, "NOW()");
+                query = query.replace(/datetime\("now"\)/g, "NOW()");
+                const result = await pool.query(query, params || []);
+                if (callback) callback(null, result.rows[0]);
+                return result.rows[0];
+            } catch (err) {
+                if (callback) callback(err, null);
+                else console.error('Query error:', err);
+            }
+        },
+        all: async (query, params, callback) => {
+            try {
+                query = query.replace(/datetime\('now'\)/g, "NOW()");
+                query = query.replace(/datetime\("now"\)/g, "NOW()");
+                const result = await pool.query(query, params || []);
+                if (callback) callback(null, result.rows);
+                return result.rows;
+            } catch (err) {
+                if (callback) callback(err, []);
+                else console.error('Query error:', err);
+            }
+        },
+        serialize: (callback) => {
+            // PostgreSQL doesn't need serialization, just run the callback
+            if (callback) callback();
+        }
+    };
+
+    initDb();
+
+} else {
+    // SQLite connection (default)
+    const sqlite3 = require('sqlite3').verbose();
+    const dbPath = process.env.DB_PATH ? path.resolve(__dirname, process.env.DB_PATH) : path.resolve(__dirname, 'cloud.db');
+
+    db = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+            console.error('Error opening database', err.message);
+        } else {
+            console.log('Connected to the SQLite database.');
+            initDb();
+        }
+    });
+}
 
 function initDb() {
     db.serialize(() => {
