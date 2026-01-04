@@ -16,6 +16,7 @@ CCloud::CCloud(IClient *pClient, IEngine *pEngine, IHttp *pHttp, IStorage *pStor
 {
 	m_aToken[0] = 0;
 	m_aUsername[0] = 0;
+	str_copy(m_aStatusMessage, "Not logged in", sizeof(m_aStatusMessage));
 	m_UploadSettings = false;
 }
 
@@ -34,6 +35,7 @@ void CCloud::Login(const char *pUser, const char *pPass)
 
 	m_pLoginRequest = std::move(HttpPostJson(aUrl, Writer.GetOutputString().c_str()));
 	m_pHttp->Run(m_pLoginRequest);
+	str_format(m_aStatusMessage, sizeof(m_aStatusMessage), "Logging in as %s...", pUser);
 	log_info("cloud", "Logging in as %s...", pUser);
 }
 
@@ -52,7 +54,8 @@ void CCloud::Register(const char *pUser, const char *pPass)
 
 	m_pRegisterRequest = std::move(HttpPostJson(aUrl, Writer.GetOutputString().c_str()));
 	m_pHttp->Run(m_pRegisterRequest);
-	log_info("cloud", "Registering %s...", pUser);
+	str_format(m_aStatusMessage, sizeof(m_aStatusMessage), "Registering as %s...", pUser);
+	log_info("cloud", "Registering as %s...", pUser);
 }
 
 void CCloud::SyncSettings(bool Upload)
@@ -125,6 +128,62 @@ void CCloud::UploadAsset(const char *pFilename)
 	log_info("cloud", "Uploading asset: %s...", pFilename);
 }
 
+// Helper structure for folder upload callback
+struct SFolderUploadContext
+{
+	CCloud *m_pCloud;
+	char m_aFolderPath[512];
+	int m_FileCount;
+};
+
+// Callback for directory listing
+static int FolderUploadCallback(const char *pName, int IsDir, int StorageType, void *pUser)
+{
+	if(IsDir)
+		return 0; // Skip directories
+	
+	SFolderUploadContext *pContext = (SFolderUploadContext *)pUser;
+	
+	// Build full relative path
+	char aFullPath[512];
+	str_format(aFullPath, sizeof(aFullPath), "%s/%s", pContext->m_aFolderPath, pName);
+	
+	// Upload the file
+	pContext->m_pCloud->UploadAsset(aFullPath);
+	pContext->m_FileCount++;
+	
+	return 0;
+}
+
+void CCloud::UploadAssetFolder(const char *pFolderPath)
+{
+	if(m_aToken[0] == 0)
+	{
+		log_error("cloud", "Not logged in");
+		return;
+	}
+
+	// Create context for callback
+	SFolderUploadContext Context;
+	Context.m_pCloud = this;
+	str_copy(Context.m_aFolderPath, pFolderPath, sizeof(Context.m_aFolderPath));
+	Context.m_FileCount = 0;
+	
+	// List all files in the directory
+	m_pStorage->ListDirectory(IStorage::TYPE_ALL, pFolderPath, FolderUploadCallback, &Context);
+	
+	if(Context.m_FileCount > 0)
+	{
+		str_format(m_aStatusMessage, sizeof(m_aStatusMessage), "Uploading %d files from %s", Context.m_FileCount, pFolderPath);
+		log_info("cloud", "Queued %d files from %s for upload", Context.m_FileCount, pFolderPath);
+	}
+	else
+	{
+		str_format(m_aStatusMessage, sizeof(m_aStatusMessage), "No files found in %s", pFolderPath);
+		log_warn("cloud", "No files found in folder: %s", pFolderPath);
+	}
+}
+
 void CCloud::DownloadAsset(const char *pFilename)
 {
 	if(m_aToken[0] == 0)
@@ -162,22 +221,27 @@ void CCloud::Update()
 				if(Token.type == json_string)
 				{
 					str_copy(m_aToken, Token.u.string.ptr, sizeof(m_aToken));
+					str_copy(m_aStatusMessage, "Logged in successfully", sizeof(m_aStatusMessage));
 					log_info("cloud", "Login successful");
 					SyncSettings(false); // Auto-sync download
+					GetInventory(); // Load inventory
 				}
 				else
 				{
+					str_copy(m_aStatusMessage, "Login failed: Invalid response", sizeof(m_aStatusMessage));
 					log_error("cloud", "Login failed: Invalid response");
 				}
 				json_value_free(pJson);
 			}
 			else
 			{
+				str_copy(m_aStatusMessage, "Login failed: No response", sizeof(m_aStatusMessage));
 				log_error("cloud", "Login failed: No response");
 			}
 		}
 		else
 		{
+			str_copy(m_aStatusMessage, "Login failed: Request error", sizeof(m_aStatusMessage));
 			log_error("cloud", "Login failed: Request error");
 		}
 		m_pLoginRequest = nullptr;
@@ -194,11 +258,13 @@ void CCloud::Update()
 				if(Token.type == json_string)
 				{
 					str_copy(m_aToken, Token.u.string.ptr, sizeof(m_aToken));
+					str_copy(m_aStatusMessage, "Registered successfully", sizeof(m_aStatusMessage));
 					log_info("cloud", "Registration successful");
 					SyncSettings(false);
 				}
 				else
 				{
+					str_copy(m_aStatusMessage, "Registration failed", sizeof(m_aStatusMessage));
 					log_error("cloud", "Registration failed");
 				}
 				json_value_free(pJson);
@@ -216,22 +282,28 @@ void CCloud::Update()
 			{
 				if(m_UploadSettings)
 				{
+					str_copy(m_aStatusMessage, "Settings uploaded", sizeof(m_aStatusMessage));
 					log_info("cloud", "Settings uploaded successfully");
 				}
 				else
 				{
 					m_pConfigManager->LoadFromJSON(pJson);
-					log_info("cloud", "Settings downloaded and applied");
+					// Save all config domains to disk
+					m_pConfigManager->Save();
+					str_copy(m_aStatusMessage, "Settings downloaded and applied", sizeof(m_aStatusMessage));
+					log_info("cloud", "Settings downloaded, applied, and saved to disk");
 				}
 				json_value_free(pJson);
 			}
 			else
 			{
+				str_copy(m_aStatusMessage, "Settings sync failed", sizeof(m_aStatusMessage));
 				log_error("cloud", "Settings sync failed: Invalid JSON");
 			}
 		}
 		else
 		{
+			str_copy(m_aStatusMessage, "Settings sync failed", sizeof(m_aStatusMessage));
 			log_error("cloud", "Settings sync failed: Request error");
 		}
 		m_pSettingsRequest = nullptr;
@@ -257,25 +329,110 @@ void CCloud::Update()
 				}
 				else
 				{
-					log_info("cloud", "Asset downloaded (%d bytes)", (int)DataSize);
-					// For now, we'll just save it to "downloaded_asset" if we don't have the name
-					IOHANDLE File = m_pStorage->OpenFile("downloaded_asset", IOFLAG_WRITE, IStorage::TYPE_SAVE);
-					if(File)
-					{
-						io_write(File, pData, DataSize);
-						io_close(File);
-					}
+					log_info("cloud", "Asset operation completed");
+					// Refresh inventory after upload
+					GetInventory();
 				}
 			}
 			else
 			{
-				log_info("cloud", "Asset operation completed");
+				log_error("cloud", "Asset operation failed");
+			}
+		}
+		m_pAssetRequest = nullptr;
+	}
+
+	// Handle inventory request
+	if(m_pInventoryRequest && m_pInventoryRequest->State() != EHttpState::QUEUED && m_pInventoryRequest->State() != EHttpState::RUNNING)
+	{
+		if(m_pInventoryRequest->State() == EHttpState::DONE)
+		{
+			json_value *pJson = ((CHttpRequest*)m_pInventoryRequest.get())->ResultJson();
+			if(pJson)
+			{
+				m_vInventory.clear();
+				
+				const json_value &Assets = (*pJson)["assets"];
+				if(Assets.type == json_array)
+				{
+					for(unsigned i = 0; i < Assets.u.array.length; i++)
+					{
+						const json_value &Asset = Assets[i];
+						SInventoryAsset Item;
+						
+						const json_value &Filename = Asset["filename"];
+						const json_value &Version = Asset["latest_version"];
+						const json_value &VersionCount = Asset["version_count"];
+						const json_value &Size = Asset["total_size"];
+						const json_value &Updated = Asset["last_updated"];
+						
+						if(Filename.type == json_string)
+							str_copy(Item.m_aFilename, Filename.u.string.ptr, sizeof(Item.m_aFilename));
+						Item.m_LatestVersion = (Version.type == json_integer) ? Version.u.integer : 0;
+						Item.m_VersionCount = (VersionCount.type == json_integer) ? VersionCount.u.integer : 0;
+						Item.m_TotalSize = (Size.type == json_integer) ? Size.u.integer : 0;
+						if(Updated.type == json_string)
+							str_copy(Item.m_aLastUpdated, Updated.u.string.ptr, sizeof(Item.m_aLastUpdated));
+						
+						m_vInventory.push_back(Item);
+					}
+					
+					str_format(m_aStatusMessage, sizeof(m_aStatusMessage), "Inventory loaded: %d items", (int)m_vInventory.size());
+					log_info("cloud", "Inventory loaded: %d items", (int)m_vInventory.size());
+				}
+				json_value_free(pJson);
+			}
+			else
+			{
+				str_copy(m_aStatusMessage, "Failed to load inventory", sizeof(m_aStatusMessage));
+				log_error("cloud", "Failed to load inventory");
 			}
 		}
 		else
 		{
-			log_error("cloud", "Asset operation failed");
+			str_copy(m_aStatusMessage, "Inventory request failed", sizeof(m_aStatusMessage));
+			log_error("cloud", "Inventory request failed");
 		}
-		m_pAssetRequest = nullptr;
+		m_pInventoryRequest = nullptr;
 	}
+}
+
+bool CCloud::IsLoggedIn() const
+{
+	return m_aToken[0] != 0;
+}
+
+const char *CCloud::GetStatusMessage() const
+{
+	return m_aStatusMessage;
+}
+
+void CCloud::GetInventory()
+{
+	if(m_aToken[0] == 0)
+	{
+		log_error("cloud", "Not logged in");
+		return;
+	}
+
+	char aUrl[256];
+	str_format(aUrl, sizeof(aUrl), "%s/assets/inventory", BASE_URL);
+
+	auto pRequest = HttpGet(aUrl);
+	
+	char aAuth[512];
+	str_format(aAuth, sizeof(aAuth), "Bearer %s", m_aToken);
+	pRequest->HeaderString("Authorization", aAuth);
+
+	m_pInventoryRequest = std::move(pRequest);
+	m_pHttp->Run(m_pInventoryRequest);
+	str_copy(m_aStatusMessage, "Fetching inventory...", sizeof(m_aStatusMessage));
+	log_info("cloud", "Fetching inventory...");
+}
+
+const CCloud::SInventoryAsset *CCloud::GetInventoryAsset(int Index) const
+{
+	if(Index < 0 || Index >= (int)m_vInventory.size())
+		return nullptr;
+	return &m_vInventory[Index];
 }

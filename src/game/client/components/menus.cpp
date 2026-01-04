@@ -16,8 +16,9 @@
 #include <engine/friends.h>
 #include <engine/gfx/image_manipulation.h>
 #include <engine/graphics.h>
-#include <engine/keys.h>
 #include <engine/serverbrowser.h>
+#include <game/client/gameclient.h>
+#include <game/client/render.h>
 #include <engine/shared/config.h>
 #include <engine/storage.h>
 #include <engine/textrender.h>
@@ -26,18 +27,8 @@
 #include <generated/protocol.h>
 
 #include <game/client/animstate.h>
-#include <game/client/components/binds.h>
-#include <game/client/components/console.h>
-#include <game/client/components/key_binder.h>
-#include <game/client/components/menu_background.h>
-#include <game/client/components/sounds.h>
-#include <game/client/gameclient.h>
 #include <game/client/ui_listbox.h>
 #include <game/localization.h>
-
-#include <algorithm>
-#include <chrono>
-#include <cmath>
 #include <vector>
 
 using namespace FontIcons;
@@ -98,6 +89,10 @@ CMenus::CMenus()
 
 	m_PasswordInput.SetBuffer(g_Config.m_Password, sizeof(g_Config.m_Password));
 	m_PasswordInput.SetHidden(true);
+
+	m_CloudUsernameInput.SetBuffer(g_Config.m_ClCloudUsername, sizeof(g_Config.m_ClCloudUsername));
+	m_CloudPasswordInput.SetBuffer(g_Config.m_ClCloudPassword, sizeof(g_Config.m_ClCloudPassword));
+	m_CloudPasswordInput.SetHidden(true);
 }
 
 int CMenus::DoButton_Toggle(const void *pId, int Checked, const CUIRect *pRect, bool Active, const unsigned Flags)
@@ -538,6 +533,16 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 		NewPage = PAGE_SETTINGS;
 	}
 	GameClient()->m_Tooltips.DoToolTip(&s_SettingsButton, &Button, Localize("Settings"));
+	
+	Box.VSplitRight(10.0f, &Box, nullptr);
+	Box.VSplitRight(33.0f, &Box, &Button);
+	static CButtonContainer s_CloudButton;
+	const char *FONT_ICON_CLOUD = "\xef\x83\x82";
+	if(DoButton_MenuTab(&s_CloudButton, FONT_ICON_CLOUD, ActivePage == PAGE_CLOUD, &Button, IGraphics::CORNER_T, &m_aAnimatorsSmallPage[SMALL_TAB_CLOUD]))
+	{
+		NewPage = PAGE_CLOUD;
+	}
+	GameClient()->m_Tooltips.DoToolTip(&s_CloudButton, &Button, Localize("Cloud"));
 
 	Box.VSplitRight(10.0f, &Box, nullptr);
 	Box.VSplitRight(33.0f, &Box, &Button);
@@ -873,6 +878,8 @@ void CMenus::OnInit()
 	m_RefreshButton.Init(Ui(), -1);
 	m_ConnectButton.Init(Ui(), -1);
 
+	m_CloudPasswordInput.SetHidden(true);
+
 	Console()->Chain("add_favorite", ConchainFavoritesUpdate, this);
 	Console()->Chain("remove_favorite", ConchainFavoritesUpdate, this);
 	Console()->Chain("add_friend", ConchainFriendlistUpdate, this);
@@ -1126,6 +1133,10 @@ void CMenus::Render()
 			else if(m_MenuPage == PAGE_SETTINGS)
 			{
 				RenderSettings(MainView);
+			}
+			else if(m_MenuPage == PAGE_CLOUD)
+			{
+				RenderCloud(MainView);
 			}
 			else
 			{

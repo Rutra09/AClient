@@ -14,11 +14,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 function initDb() {
     db.serialize(() => {
-        // Users table
+        // Users table with role
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'user',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
@@ -30,16 +31,42 @@ function initDb() {
             FOREIGN KEY (user_id) REFERENCES users (id)
         )`);
 
-        // Assets table
+        // Assets table with version tracking
         db.run(`CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            user_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
             path TEXT NOT NULL,
             size INTEGER,
+            version INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )`);
+
+        // Create index for efficient version queries
+        db.run(`CREATE INDEX IF NOT EXISTS idx_assets_user_file 
+                ON assets(user_id, filename, version DESC)`);
+
+        // User limits table
+        db.run(`CREATE TABLE IF NOT EXISTS user_limits (
+            user_id INTEGER PRIMARY KEY,
+            max_versions INTEGER DEFAULT 3,
+            max_storage_mb INTEGER DEFAULT 100,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )`);
+
+        // Activity log table for admin monitoring
+        db.run(`CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            details TEXT,
+            ip_address TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )`);
+
+        console.log('Database tables initialized with roles and activity logging');
     });
 }
 

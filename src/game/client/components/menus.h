@@ -6,6 +6,7 @@
 #include <base/types.h>
 #include <base/vmath.h>
 
+#include <engine/cloud.h>
 #include <engine/console.h>
 #include <engine/demo.h>
 #include <engine/friends.h>
@@ -240,6 +241,8 @@ protected:
 
 	// for password popup
 	CLineInput m_PasswordInput;
+	CLineInput m_CloudUsernameInput;
+	CLineInput m_CloudPasswordInput;
 
 	// for call vote
 	int m_CallvoteSelectedOption;
@@ -556,6 +559,7 @@ protected:
 	void RenderSkinPartSelection7(CUIRect MainView);
 	void RenderSettingsGraphics(CUIRect MainView);
 	void RenderSettingsSound(CUIRect MainView);
+	void RenderCloud(CUIRect MainView);
 	void RenderSettings(CUIRect MainView);
 	void RenderSettingsCustom(CUIRect MainView);
 
@@ -596,6 +600,8 @@ protected:
 	}
 
 	static CUi::EPopupMenuFunctionResult PopupMapPicker(void *pContext, CUIRect View, bool Active);
+
+	class ICloud *Cloud() const { return Kernel()->RequestInterface<ICloud>(); }
 
 	void SetNeedSendInfo();
 	void UpdateColors();
@@ -646,6 +652,7 @@ public:
 		PAGE_SETTINGS,
 		PAGE_NETWORK,
 		PAGE_GHOST,
+		PAGE_CLOUD,
 
 		PAGE_LENGTH,
 	};
@@ -696,6 +703,7 @@ public:
 		SMALL_TAB_BROWSER_FILTER,
 		SMALL_TAB_BROWSER_INFO,
 		SMALL_TAB_BROWSER_FRIENDS,
+		SMALL_TAB_CLOUD,
 
 		SMALL_TAB_LENGTH,
 	};

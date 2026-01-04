@@ -4,9 +4,11 @@
 #include <engine/client/client.h>
 #include <engine/shared/http.h>
 #include <engine/storage.h>
+#include <engine/cloud.h>
 #include <string>
+#include <vector>
 
-class CCloud
+class CCloud : public ICloud
 {
 	class IClient *m_pClient;
 	class IEngine *m_pEngine;
@@ -16,24 +18,47 @@ class CCloud
 
 	char m_aToken[512];
 	char m_aUsername[64];
+	char m_aStatusMessage[256];
 
 	std::shared_ptr<IHttpRequest> m_pLoginRequest;
 	std::shared_ptr<IHttpRequest> m_pRegisterRequest;
 	std::shared_ptr<IHttpRequest> m_pSettingsRequest;
 	std::shared_ptr<IHttpRequest> m_pAssetRequest;
+	std::shared_ptr<IHttpRequest> m_pInventoryRequest;
 
 	bool m_UploadSettings; // True if uploading, false if downloading
 
 public:
+	struct SInventoryAsset
+	{
+		char m_aFilename[128];
+		int m_LatestVersion;
+		int m_VersionCount;
+		int m_TotalSize;
+		char m_aLastUpdated[64];
+	};
+
 	CCloud(IClient *pClient, IEngine *pEngine, IHttp *pHttp, IStorage *pStorage, IConfigManager *pConfigManager);
 
-	void Login(const char *pUser, const char *pPass);
-	void Register(const char *pUser, const char *pPass);
-	void SyncSettings(bool Upload);
-	void UploadAsset(const char *pFilename);
-	void DownloadAsset(const char *pFilename);
+	void Login(const char *pUser, const char *pPass) override;
+	void Register(const char *pUser, const char *pPass) override;
+	void SyncSettings(bool Upload) override;
+	void UploadAsset(const char *pFilename) override;
+	void UploadAssetFolder(const char *pFolderPath) override;
+	void DownloadAsset(const char *pFilename) override;
+
+	bool IsLoggedIn() const override;
+	const char *GetStatusMessage() const override;
+	void GetInventory() override;
+
+	// Inventory access
+	int GetInventoryCount() const { return m_vInventory.size(); }
+	const SInventoryAsset *GetInventoryAsset(int Index) const;
 
 	void Update();
+
+private:
+	std::vector<SInventoryAsset> m_vInventory;
 };
 
 #endif

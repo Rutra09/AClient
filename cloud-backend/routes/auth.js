@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../database');
 
 const router = express.Router();
-const SECRET_KEY = 'your_secret_key_here'; // In production, use environment variable
+const SECRET_KEY = 'your-secret-key-change-in-production'; // Must match authMiddleware.js
 
 // Register
 router.post('/register', (req, res) => {

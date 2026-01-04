@@ -61,7 +61,7 @@ public:
 class CClient : public IClient, public CDemoPlayer::IListener
 {
 	// needed interfaces
-	CCloud *m_pCloud = nullptr;
+	std::unique_ptr<CCloud> m_pCloud;
 	IConfigManager *m_pConfigManager = nullptr;
 	CConfig *m_pConfig = nullptr;
 	IConsole *m_pConsole = nullptr;

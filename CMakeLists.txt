@@ -2540,6 +2540,7 @@ if(CLIENT)
     components/menus.cpp
     components/menus.h
     components/menus_browser.cpp
+    components/menus_cloud.cpp
     components/menus_demo.cpp
     components/menus_ingame.cpp
     components/menus_ingame_touch_controls.cpp

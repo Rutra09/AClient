@@ -98,6 +98,9 @@ MACRO_CONFIG_INT(ClSpecAutoSync, cl_spec_auto_sync, 0, 0, 1, CFGFLAG_CLIENT | CF
 MACRO_CONFIG_INT(ClAirjumpindicator, cl_airjumpindicator, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show the air jump indicator")
 MACRO_CONFIG_INT(ClThreadsoundloading, cl_threadsoundloading, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Load sound files threaded")
 
+MACRO_CONFIG_STR(ClCloudUsername, cl_cloud_username, 32, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "Cloud username")
+MACRO_CONFIG_STR(ClCloudPassword, cl_cloud_password, 32, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "Cloud password")
+
 
 MACRO_CONFIG_INT(ClWarningTeambalance, cl_warning_teambalance, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Warn about team balance")
 

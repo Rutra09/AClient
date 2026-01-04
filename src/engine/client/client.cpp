@@ -3128,7 +3128,8 @@ void CClient::InitInterfaces()
 	m_GhostRecorder.Init();
 	m_GhostLoader.Init();
 
-	m_pCloud = new CCloud(this, m_pEngine, &m_Http, m_pStorage, m_pConfigManager);
+	m_pCloud = std::make_unique<CCloud>(this, m_pEngine, &m_Http, m_pStorage, m_pConfigManager);
+	Kernel()->RegisterInterface(m_pCloud.get());
 }
 
 void CClient::Run()
