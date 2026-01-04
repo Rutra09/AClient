@@ -34,6 +34,7 @@ class CDemoEdit;
 class IDemoRecorder;
 class CMsgPacker;
 class CUnpacker;
+class CCloud;
 class IConfigManager;
 class IDiscord;
 class IEngine;
@@ -60,6 +61,7 @@ public:
 class CClient : public IClient, public CDemoPlayer::IListener
 {
 	// needed interfaces
+	CCloud *m_pCloud = nullptr;
 	IConfigManager *m_pConfigManager = nullptr;
 	CConfig *m_pConfig = nullptr;
 	IConsole *m_pConsole = nullptr;
@@ -472,6 +474,12 @@ public:
 	static void Con_DemoSliceBegin(IConsole::IResult *pResult, void *pUserData);
 	static void Con_DemoSliceEnd(IConsole::IResult *pResult, void *pUserData);
 	static void Con_SaveReplay(IConsole::IResult *pResult, void *pUserData);
+
+	static void Con_CloudLogin(IConsole::IResult *pResult, void *pUserData);
+	static void Con_CloudRegister(IConsole::IResult *pResult, void *pUserData);
+	static void Con_CloudSyncSettings(IConsole::IResult *pResult, void *pUserData);
+	static void Con_CloudUploadAsset(IConsole::IResult *pResult, void *pUserData);
+	static void Con_CloudDownloadAsset(IConsole::IResult *pResult, void *pUserData);
 
 	void RegisterCommands();
 

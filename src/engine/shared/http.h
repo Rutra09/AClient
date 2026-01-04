@@ -15,31 +15,11 @@
 #include <optional>
 #include <unordered_map>
 
+struct _json_value;
 typedef struct _json_value json_value;
 class IStorage;
 
-enum class EHttpState
-{
-	ERROR = -1,
-	QUEUED,
-	RUNNING,
-	DONE,
-	ABORTED,
-};
-
-enum class HTTPLOG
-{
-	NONE,
-	FAILURE,
-	ALL,
-};
-
-enum class IPRESOLVE
-{
-	WHATEVER,
-	V4,
-	V6,
-};
+// Enums moved to engine/http.h
 
 class CTimeout
 {
@@ -195,7 +175,7 @@ public:
 		mem_copy(m_pBody, pJson, m_BodyLength);
 	}
 	void Header(const char *pNameColonValue);
-	void HeaderString(const char *pName, const char *pValue)
+	void HeaderString(const char *pName, const char *pValue) override
 	{
 		char aHeader[256];
 		str_format(aHeader, sizeof(aHeader), "%s: %s", pName, pValue);
@@ -223,7 +203,7 @@ public:
 	double Current() const { return m_Current.load(std::memory_order_relaxed); }
 	double Size() const { return m_Size.load(std::memory_order_relaxed); }
 	int Progress() const { return m_Progress.load(std::memory_order_relaxed); }
-	EHttpState State() const { return m_State; }
+	EHttpState State() const override { return m_State; }
 	bool Done() const
 	{
 		EHttpState State = m_State;
@@ -241,7 +221,7 @@ public:
 	void Wait();
 
 	void Result(unsigned char **ppResult, size_t *pResultLength) const;
-	json_value *ResultJson() const;
+	struct _json_value *ResultJson() const;
 	const SHA256_DIGEST &ResultSha256() const;
 
 	int StatusCode() const;

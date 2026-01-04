@@ -74,7 +74,9 @@ namespace DefaultConfig
 #define MACRO_CONFIG_STR(Name, ScriptName, Len, Def, Flags, Desc) \
 	/** Default value of the string config variable 'ScriptName' (see CConfig::m_##Name). */ \
 	static constexpr const char *const Name = Def;
-#include "config_variables.h"
+#define SET_CONFIG_DOMAIN(DOMAIN)
+#include "config_includes.h"
+#undef SET_CONFIG_DOMAIN
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
@@ -283,6 +285,9 @@ public:
 	void StoreUnknownCommand(const char *pCommand) override;
 
 	void PossibleConfigVariables(const char *pStr, int FlagMask, POSSIBLECFGFUNC pfnCallback, void *pUserData) override;
+
+	std::string SaveToJSON() override;
+	void LoadFromJSON(const struct _json_value *pJson) override;
 };
 
 #endif

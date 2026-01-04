@@ -249,7 +249,7 @@ void CMenus::RenderGame(CUIRect MainView)
 				if(GameClient()->m_TouchControls.IsEditingActive())
 				{
 					GameClient()->m_TouchControls.ResetVirtualVisibilities();
-					m_MenusIngameTouchControls.m_EditElement = CMenusIngameTouchControls::EElementType::LAYOUT;
+					m_MenusIngameTouchControls.m_EditElement = CMenusIngameTouchControls::EElementType::EDIT_LAYOUT;
 				}
 				else
 				{
@@ -281,10 +281,10 @@ void CMenus::RenderGame(CUIRect MainView)
 			Console()->ExecuteLine("toggle_local_console", IConsole::CLIENT_ID_UNSPECIFIED);
 		}
 		// Only when these are all false, the preview page is rendered. Once the page is not rendered, update is needed upon next rendering.
-		if(!GameClient()->m_TouchControls.IsEditingActive() || m_MenusIngameTouchControls.m_CurrentMenu != CMenusIngameTouchControls::EMenuType::MENU_BUTTONS || GameClient()->m_TouchControls.IsButtonEditing())
+		if(!GameClient()->m_TouchControls.IsEditingActive() || m_MenusIngameTouchControls.m_CurrentMenu != CMenusIngameTouchControls::EMenuType::TAB_BUTTONS || GameClient()->m_TouchControls.IsButtonEditing())
 			m_MenusIngameTouchControls.m_NeedUpdatePreview = true;
 		// Quit preview all buttons automatically.
-		if(!GameClient()->m_TouchControls.IsEditingActive() || m_MenusIngameTouchControls.m_CurrentMenu != CMenusIngameTouchControls::EMenuType::MENU_PREVIEW)
+		if(!GameClient()->m_TouchControls.IsEditingActive() || m_MenusIngameTouchControls.m_CurrentMenu != CMenusIngameTouchControls::EMenuType::TAB_PREVIEW)
 			GameClient()->m_TouchControls.SetPreviewAllButtons(false);
 		if(GameClient()->m_TouchControls.IsEditingActive())
 		{
@@ -300,7 +300,7 @@ void CMenus::RenderGame(CUIRect MainView)
 			}
 			if(m_MenusIngameTouchControls.m_FirstEnter)
 			{
-				m_MenusIngameTouchControls.m_aCachedVisibilities[(int)CTouchControls::EButtonVisibility::DEMO_PLAYER] = CMenusIngameTouchControls::EVisibilityType::EXCLUDE;
+				m_MenusIngameTouchControls.m_aCachedVisibilities[(int)CTouchControls::EButtonVisibility::DEMO_PLAYER] = CMenusIngameTouchControls::EVisibilityType::V_EXCLUDE;
 				m_MenusIngameTouchControls.m_ColorActive = color_cast<ColorHSLA>(GameClient()->m_TouchControls.BackgroundColorActive()).Pack(true);
 				m_MenusIngameTouchControls.m_ColorInactive = color_cast<ColorHSLA>(GameClient()->m_TouchControls.BackgroundColorInactive()).Pack(true);
 				m_MenusIngameTouchControls.m_FirstEnter = false;
@@ -314,10 +314,10 @@ void CMenus::RenderGame(CUIRect MainView)
 			m_MenusIngameTouchControls.RenderSelectingTab(SelectingTab);
 			switch(m_MenusIngameTouchControls.m_CurrentMenu)
 			{
-			case CMenusIngameTouchControls::EMenuType::MENU_FILE: m_MenusIngameTouchControls.RenderTouchControlsEditor(MainView); break;
-			case CMenusIngameTouchControls::EMenuType::MENU_BUTTONS: m_MenusIngameTouchControls.RenderTouchButtonEditor(MainView); break;
-			case CMenusIngameTouchControls::EMenuType::MENU_SETTINGS: m_MenusIngameTouchControls.RenderConfigSettings(MainView); break;
-			case CMenusIngameTouchControls::EMenuType::MENU_PREVIEW: m_MenusIngameTouchControls.RenderPreviewSettings(MainView); break;
+			case CMenusIngameTouchControls::EMenuType::TAB_FILE: m_MenusIngameTouchControls.RenderTouchControlsEditor(MainView); break;
+			case CMenusIngameTouchControls::EMenuType::TAB_BUTTONS: m_MenusIngameTouchControls.RenderTouchButtonEditor(MainView); break;
+			case CMenusIngameTouchControls::EMenuType::TAB_SETTINGS: m_MenusIngameTouchControls.RenderConfigSettings(MainView); break;
+			case CMenusIngameTouchControls::EMenuType::TAB_PREVIEW: m_MenusIngameTouchControls.RenderPreviewSettings(MainView); break;
 			default: dbg_assert_failed("Unknown selected tab value = %d.", (int)m_MenusIngameTouchControls.m_CurrentMenu);
 			}
 		}

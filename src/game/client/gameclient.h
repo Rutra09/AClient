@@ -8,6 +8,9 @@
 #include <base/color.h>
 #include <base/vmath.h>
 
+#include <bitset>
+#include <vector>
+
 #include <engine/client.h>
 #include <engine/client/enums.h>
 #include <engine/console.h>

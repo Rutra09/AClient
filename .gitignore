@@ -144,3 +144,8 @@ tags
 /build
 
 !steam_api.dll
+
+# Cloud Backend
+cloud-backend/node_modules/
+cloud-backend/uploads/
+cloud-backend/*.db

@@ -2,6 +2,7 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
 #include "client.h"
+#include "cloud.h"
 
 #include "demoedit.h"
 #include "friends.h"
@@ -3060,6 +3061,7 @@ void CClient::Update()
 
 	Discord()->Update(g_Config.m_TcDiscordRPC);
 	Steam()->Update();
+	m_pCloud->Update();
 	if(Steam()->GetConnectAddress())
 	{
 		HandleConnectAddress(Steam()->GetConnectAddress());
@@ -3125,6 +3127,8 @@ void CClient::InitInterfaces()
 
 	m_GhostRecorder.Init();
 	m_GhostLoader.Init();
+
+	m_pCloud = new CCloud(this, m_pEngine, &m_Http, m_pStorage, m_pConfigManager);
 }
 
 void CClient::Run()
@@ -4546,6 +4550,44 @@ void CClient::ConchainStdoutOutputLevel(IConsole::IResult *pResult, void *pUserD
 	}
 }
 
+void CClient::Con_CloudLogin(IConsole::IResult *pResult, void *pUserData)
+{
+	CClient *pSelf = (CClient *)pUserData;
+	pSelf->m_pCloud->Login(pResult->GetString(0), pResult->GetString(1));
+}
+
+void CClient::Con_CloudRegister(IConsole::IResult *pResult, void *pUserData)
+{
+	CClient *pSelf = (CClient *)pUserData;
+	pSelf->m_pCloud->Register(pResult->GetString(0), pResult->GetString(1));
+}
+
+void CClient::Con_CloudSyncSettings(IConsole::IResult *pResult, void *pUserData)
+{
+	CClient *pSelf = (CClient *)pUserData;
+	bool Upload = false;
+	if(pResult->NumArguments() > 0)
+	{
+		if(str_comp(pResult->GetString(0), "save") == 0)
+			Upload = true;
+		else if(str_comp(pResult->GetString(0), "load") == 0)
+			Upload = false;
+	}
+	pSelf->m_pCloud->SyncSettings(Upload);
+}
+
+void CClient::Con_CloudUploadAsset(IConsole::IResult *pResult, void *pUserData)
+{
+	CClient *pSelf = (CClient *)pUserData;
+	pSelf->m_pCloud->UploadAsset(pResult->GetString(0));
+}
+
+void CClient::Con_CloudDownloadAsset(IConsole::IResult *pResult, void *pUserData)
+{
+	CClient *pSelf = (CClient *)pUserData;
+	pSelf->m_pCloud->DownloadAsset(pResult->GetString(0));
+}
+
 void CClient::RegisterCommands()
 {
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
@@ -4587,6 +4629,12 @@ void CClient::RegisterCommands()
 
 	m_pConsole->Register("save_replay", "?i[length] ?r[filename]", CFGFLAG_CLIENT, Con_SaveReplay, this, "Save a replay of the last defined amount of seconds");
 	m_pConsole->Register("benchmark_quit", "i[seconds] r[file]", CFGFLAG_CLIENT | CFGFLAG_STORE, Con_BenchmarkQuit, this, "Benchmark frame times for number of seconds to file, then quit");
+
+	m_pConsole->Register("cloud_login", "s[user] s[pass]", CFGFLAG_CLIENT, Con_CloudLogin, this, "Login to cloud");
+	m_pConsole->Register("cloud_register", "s[user] s[pass]", CFGFLAG_CLIENT, Con_CloudRegister, this, "Register to cloud");
+	m_pConsole->Register("cloud_sync_settings", "?s[load|save]", CFGFLAG_CLIENT, Con_CloudSyncSettings, this, "Sync settings (default: load)");
+	m_pConsole->Register("cloud_upload_asset", "r[filename]", CFGFLAG_CLIENT, Con_CloudUploadAsset, this, "Upload asset to cloud");
+	m_pConsole->Register("cloud_download_asset", "r[filename]", CFGFLAG_CLIENT, Con_CloudDownloadAsset, this, "Download asset from cloud");
 
 	RustVersionRegister(*m_pConsole);
 

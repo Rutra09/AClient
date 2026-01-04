@@ -4,6 +4,7 @@
 #define ENGINE_CONFIG_H
 
 #include "kernel.h"
+#include <string>
 
 #define CONFIG_DOMAIN(Name, ConfigPath, HasVars) Name,
 enum ConfigDomain // NOLINT(readability-enum-initial-value)
@@ -52,7 +53,11 @@ public:
 
 	virtual void StoreUnknownCommand(const char *pCommand) = 0;
 
+
 	virtual void PossibleConfigVariables(const char *pStr, int FlagMask, POSSIBLECFGFUNC pfnCallback, void *pUserData) = 0;
+
+	virtual std::string SaveToJSON() = 0;
+	virtual void LoadFromJSON(const struct _json_value *pJson) = 0;
 };
 
 extern IConfigManager *CreateConfigManager();

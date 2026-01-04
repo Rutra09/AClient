@@ -1,4 +1,6 @@
 #include "mumble.h"
+#include <cstdlib>
+#include <stdlib.h>
 
 #if defined(__ANDROID__)
 	#define STUB

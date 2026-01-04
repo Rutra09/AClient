@@ -2433,6 +2433,8 @@ if(CLIENT)
     checksum.h
     client.cpp
     client.h
+    cloud.cpp
+    cloud.h
     demoedit.cpp
     demoedit.h
     discord.cpp

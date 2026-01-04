@@ -29,7 +29,7 @@ static const constexpr float ROWSIZE = 25.0f;
 static const constexpr float ROWGAP = 5.0f;
 static const constexpr float FONTSIZE = 15.0f;
 
-const CMenusIngameTouchControls::CBehaviorFactoryEditor CMenusIngameTouchControls::BEHAVIOR_FACTORIES_EDITOR[] = {
+const CMenusIngameTouchControls::CBehaviorFactoryEditor CMenusIngameTouchControls::BEHAVIOR_FACTORIES_EDITOR[10] = {
 	{CTouchControls::CIngameMenuTouchButtonBehavior::BEHAVIOR_ID, []() { return std::make_unique<CTouchControls::CIngameMenuTouchButtonBehavior>(); }},
 	{CTouchControls::CExtraMenuTouchButtonBehavior::BEHAVIOR_ID, []() { return std::make_unique<CTouchControls::CExtraMenuTouchButtonBehavior>(0); }},
 	{CTouchControls::CEmoticonTouchButtonBehavior::BEHAVIOR_ID, []() { return std::make_unique<CTouchControls::CEmoticonTouchButtonBehavior>(); }},
@@ -65,17 +65,17 @@ void CMenusIngameTouchControls::RenderTouchButtonEditor(CUIRect MainView)
 	EditBox.VSplitLeft(EditBox.w / 3.0f, &RightButton, &EditBox);
 	EditBox.VSplitMid(&LeftButton, &MiddleButton);
 
-	if(GameClient()->m_Menus.DoButton_MenuTab(m_aEditElementIds.data(), Localize("Layout"), m_EditElement == EElementType::LAYOUT, &RightButton, IGraphics::CORNER_TL, nullptr, nullptr, nullptr, nullptr, 5.0f))
+	if(GameClient()->m_Menus.DoButton_MenuTab(m_aEditElementIds.data(), Localize("Layout"), m_EditElement == EElementType::EDIT_LAYOUT, &RightButton, IGraphics::CORNER_TL, nullptr, nullptr, nullptr, nullptr, 5.0f))
 	{
-		m_EditElement = EElementType::LAYOUT;
+		m_EditElement = EElementType::EDIT_LAYOUT;
 	}
-	if(GameClient()->m_Menus.DoButton_MenuTab(&m_aEditElementIds[1], Localize("Visibility"), m_EditElement == EElementType::VISIBILITY, &LeftButton, IGraphics::CORNER_NONE, nullptr, nullptr, nullptr, nullptr, 5.0f))
+	if(GameClient()->m_Menus.DoButton_MenuTab(&m_aEditElementIds[1], Localize("Visibility"), m_EditElement == EElementType::EDIT_VISIBILITY, &LeftButton, IGraphics::CORNER_NONE, nullptr, nullptr, nullptr, nullptr, 5.0f))
 	{
-		m_EditElement = EElementType::VISIBILITY;
+		m_EditElement = EElementType::EDIT_VISIBILITY;
 	}
-	if(GameClient()->m_Menus.DoButton_MenuTab(&m_aEditElementIds[2], Localize("Behavior"), m_EditElement == EElementType::BEHAVIOR, &MiddleButton, IGraphics::CORNER_TR, nullptr, nullptr, nullptr, nullptr, 5.0f))
+	if(GameClient()->m_Menus.DoButton_MenuTab(&m_aEditElementIds[2], Localize("Behavior"), m_EditElement == EElementType::EDIT_BEHAVIOR, &MiddleButton, IGraphics::CORNER_TR, nullptr, nullptr, nullptr, nullptr, 5.0f))
 	{
-		m_EditElement = EElementType::BEHAVIOR;
+		m_EditElement = EElementType::EDIT_BEHAVIOR;
 	}
 
 	// Edit blocks.
@@ -84,9 +84,9 @@ void CMenusIngameTouchControls::RenderTouchButtonEditor(CUIRect MainView)
 	Block.VMargin(SUBMARGIN, &Block);
 	switch(m_EditElement)
 	{
-	case EElementType::LAYOUT: Changed |= RenderLayoutSettingBlock(Block); break;
-	case EElementType::VISIBILITY: Changed |= RenderVisibilitySettingBlock(Block); break;
-	case EElementType::BEHAVIOR: Changed |= RenderBehaviorSettingBlock(Block); break;
+	case EElementType::EDIT_LAYOUT: Changed |= RenderLayoutSettingBlock(Block); break;
+	case EElementType::EDIT_VISIBILITY: Changed |= RenderVisibilitySettingBlock(Block); break;
+	case EElementType::EDIT_BEHAVIOR: Changed |= RenderBehaviorSettingBlock(Block); break;
 	default: dbg_assert_failed("Unknown m_EditElement = %d.", (int)m_EditElement);
 	}
 
@@ -288,7 +288,7 @@ bool CMenusIngameTouchControls::RenderBehaviorSettingBlock(CUIRect Block)
 	if(NewButtonBehavior != m_EditBehaviorType)
 	{
 		m_EditBehaviorType = NewButtonBehavior;
-		if(m_EditBehaviorType == EBehaviorType::BIND)
+		if(m_EditBehaviorType == EBehaviorType::B_BIND)
 		{
 			m_vBehaviorElements[0]->UpdateInputs();
 		}
@@ -297,7 +297,7 @@ bool CMenusIngameTouchControls::RenderBehaviorSettingBlock(CUIRect Block)
 	}
 	switch(m_EditBehaviorType)
 	{
-	case EBehaviorType::BIND:
+	case EBehaviorType::B_BIND:
 	{
 		Block.HSplitTop(ROWSIZE, &EditBox, &Block);
 		Block.HSplitTop(ROWGAP, nullptr, &Block);
@@ -345,7 +345,7 @@ bool CMenusIngameTouchControls::RenderBehaviorSettingBlock(CUIRect Block)
 		}
 		break;
 	}
-	case EBehaviorType::PREDEFINED:
+	case EBehaviorType::B_PREDEFINED:
 	{
 		Block.HSplitTop(ROWSIZE, &EditBox, &Block);
 		Block.HSplitTop(ROWGAP, nullptr, &Block);
@@ -397,7 +397,7 @@ bool CMenusIngameTouchControls::RenderBehaviorSettingBlock(CUIRect Block)
 		}
 		break;
 	}
-	case EBehaviorType::BIND_TOGGLE:
+	case EBehaviorType::B_BIND_TOGGLE:
 	{
 		static CScrollRegion s_BindToggleScrollRegion;
 		CScrollRegionParams ScrollParam;
@@ -576,21 +576,21 @@ bool CMenusIngameTouchControls::RenderVisibilitySettingBlock(CUIRect Block)
 			}
 			MiddleButton.VSplitLeft(MiddleButton.w / 3.0f, &LeftButton, &MiddleButton);
 			MiddleButton.VSplitMid(&MiddleButton, &RightButton);
-			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::INCLUDE], Localize("Included", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::INCLUDE, &LeftButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_L))
+			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::V_INCLUDE], Localize("Included", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::V_INCLUDE, &LeftButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_L))
 			{
-				m_aCachedVisibilities[Current] = EVisibilityType::INCLUDE;
+				m_aCachedVisibilities[Current] = EVisibilityType::V_INCLUDE;
 				SetUnsavedChanges(true);
 				Changed = true;
 			}
-			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::EXCLUDE], Localize("Excluded", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::EXCLUDE, &MiddleButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_NONE))
+			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::V_EXCLUDE], Localize("Excluded", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::V_EXCLUDE, &MiddleButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_NONE))
 			{
-				m_aCachedVisibilities[Current] = EVisibilityType::EXCLUDE;
+				m_aCachedVisibilities[Current] = EVisibilityType::V_EXCLUDE;
 				SetUnsavedChanges(true);
 				Changed = true;
 			}
-			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::IGNORE], Localize("Ignore", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::IGNORE, &RightButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_R))
+			if(GameClient()->m_Menus.DoButton_Menu(&s_avVisibilitySelector[Current][(int)EVisibilityType::V_IGNORE], Localize("Ignore", "Touch button visibility preview"), m_aCachedVisibilities[Current] == EVisibilityType::V_IGNORE, &RightButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_R))
 			{
-				m_aCachedVisibilities[Current] = EVisibilityType::IGNORE;
+				m_aCachedVisibilities[Current] = EVisibilityType::V_IGNORE;
 				SetUnsavedChanges(true);
 				Changed = true;
 			}
@@ -702,7 +702,7 @@ void CMenusIngameTouchControls::RenderTouchButtonBrowser(CUIRect MainView)
 				return pLhs->m_UnitRect.m_H < pRhs->m_UnitRect.m_H;
 			return pLhs->m_VisibilityCached;
 		}};
-	for(unsigned HeaderIndex = (unsigned)ESortType::LABEL; HeaderIndex < (unsigned)ESortType::NUM_SORTS; HeaderIndex++)
+	for(unsigned HeaderIndex = (unsigned)ESortType::SORT_LABEL; HeaderIndex < (unsigned)ESortType::NUM_SORTS; HeaderIndex++)
 	{
 		if(GameClient()->m_Menus.DoButton_GridHeader(&m_aSortHeaderIds[HeaderIndex], "",
 			   (unsigned)m_SortType == HeaderIndex, aHeaderDatas[HeaderIndex].first))
@@ -858,20 +858,20 @@ void CMenusIngameTouchControls::RenderSelectingTab(CUIRect SelectingTab)
 	CUIRect LeftButton;
 	SelectingTab.VSplitLeft(SelectingTab.w / 4.0f, &LeftButton, &SelectingTab);
 	static CButtonContainer s_FileTab;
-	if(GameClient()->m_Menus.DoButton_MenuTab(&s_FileTab, Localize("File"), m_CurrentMenu == EMenuType::MENU_FILE, &LeftButton, IGraphics::CORNER_TL))
-		m_CurrentMenu = EMenuType::MENU_FILE;
+	if(GameClient()->m_Menus.DoButton_MenuTab(&s_FileTab, Localize("File"), m_CurrentMenu == EMenuType::TAB_FILE, &LeftButton, IGraphics::CORNER_TL))
+		m_CurrentMenu = EMenuType::TAB_FILE;
 	SelectingTab.VSplitLeft(SelectingTab.w / 3.0f, &LeftButton, &SelectingTab);
 	static CButtonContainer s_ButtonTab;
-	if(GameClient()->m_Menus.DoButton_MenuTab(&s_ButtonTab, Localize("Buttons"), m_CurrentMenu == EMenuType::MENU_BUTTONS, &LeftButton, IGraphics::CORNER_NONE))
-		m_CurrentMenu = EMenuType::MENU_BUTTONS;
+	if(GameClient()->m_Menus.DoButton_MenuTab(&s_ButtonTab, Localize("Buttons"), m_CurrentMenu == EMenuType::TAB_BUTTONS, &LeftButton, IGraphics::CORNER_NONE))
+		m_CurrentMenu = EMenuType::TAB_BUTTONS;
 	SelectingTab.VSplitLeft(SelectingTab.w / 2.0f, &LeftButton, &SelectingTab);
 	static CButtonContainer s_SettingsMenuTab;
-	if(GameClient()->m_Menus.DoButton_MenuTab(&s_SettingsMenuTab, Localize("Settings"), m_CurrentMenu == EMenuType::MENU_SETTINGS, &LeftButton, IGraphics::CORNER_NONE))
-		m_CurrentMenu = EMenuType::MENU_SETTINGS;
+	if(GameClient()->m_Menus.DoButton_MenuTab(&s_SettingsMenuTab, Localize("Settings"), m_CurrentMenu == EMenuType::TAB_SETTINGS, &LeftButton, IGraphics::CORNER_NONE))
+		m_CurrentMenu = EMenuType::TAB_SETTINGS;
 	SelectingTab.VSplitLeft(SelectingTab.w / 1.0f, &LeftButton, &SelectingTab);
 	static CButtonContainer s_PreviewTab;
-	if(GameClient()->m_Menus.DoButton_MenuTab(&s_PreviewTab, Localize("Preview"), m_CurrentMenu == EMenuType::MENU_PREVIEW, &LeftButton, IGraphics::CORNER_TR))
-		m_CurrentMenu = EMenuType::MENU_PREVIEW;
+	if(GameClient()->m_Menus.DoButton_MenuTab(&s_PreviewTab, Localize("Preview"), m_CurrentMenu == EMenuType::TAB_PREVIEW, &LeftButton, IGraphics::CORNER_TR))
+		m_CurrentMenu = EMenuType::TAB_PREVIEW;
 }
 
 void CMenusIngameTouchControls::RenderConfigSettings(CUIRect MainView)
@@ -1160,14 +1160,14 @@ bool CMenusIngameTouchControls::CheckCachedSettings() const
 void CMenusIngameTouchControls::ResetCachedSettings()
 {
 	// Reset all cached values.
-	m_EditBehaviorType = EBehaviorType::BIND;
+	m_EditBehaviorType = EBehaviorType::B_BIND;
 	m_PredefinedBehaviorType = EPredefinedType::EXTRA_MENU;
 	m_CachedExtraMenuNumber = 0;
 	m_vBehaviorElements.clear();
 	m_vBehaviorElements.emplace_back(std::make_unique<CBehaviorElements>());
 	m_vBehaviorElements.emplace_back(std::make_unique<CBehaviorElements>());
-	m_aCachedVisibilities.fill(EVisibilityType::IGNORE); // 2 means don't have the visibility, true:1,false:0
-	m_aCachedVisibilities[(int)CTouchControls::EButtonVisibility::DEMO_PLAYER] = EVisibilityType::EXCLUDE;
+	m_aCachedVisibilities.fill(EVisibilityType::V_IGNORE); // 2 means don't have the visibility, true:1,false:0
+	m_aCachedVisibilities[(int)CTouchControls::EButtonVisibility::DEMO_PLAYER] = EVisibilityType::V_EXCLUDE;
 	// These things can't be empty. std::stoi can't cast empty string.
 	SetPosInputs({0, 0, CTouchControls::BUTTON_SIZE_MINIMUM, CTouchControls::BUTTON_SIZE_MINIMUM});
 	m_CachedShape = CTouchControls::EButtonShape::RECT;
@@ -1187,7 +1187,7 @@ void CMenusIngameTouchControls::CacheAllSettingsFromTarget(CTouchControls::CTouc
 	for(const auto &Visibility : pTargetButton->m_vVisibilities)
 	{
 		dbg_assert((int)Visibility.m_Type < (int)CTouchControls::EButtonVisibility::NUM_VISIBILITIES, "Target button has out of bound visibility type: %d", (int)Visibility.m_Type);
-		m_aCachedVisibilities[(int)Visibility.m_Type] = Visibility.m_Parity ? EVisibilityType::INCLUDE : EVisibilityType::EXCLUDE;
+		m_aCachedVisibilities[(int)Visibility.m_Type] = Visibility.m_Parity ? EVisibilityType::V_INCLUDE : EVisibilityType::V_EXCLUDE;
 	}
 
 	// These are behavior values.
@@ -1196,7 +1196,7 @@ void CMenusIngameTouchControls::CacheAllSettingsFromTarget(CTouchControls::CTouc
 		const char *pBehaviorType = pTargetButton->m_pBehavior->GetBehaviorType();
 		if(str_comp(pBehaviorType, CTouchControls::CBindTouchButtonBehavior::BEHAVIOR_TYPE) == 0)
 		{
-			m_EditBehaviorType = EBehaviorType::BIND;
+			m_EditBehaviorType = EBehaviorType::B_BIND;
 			auto *pTargetBehavior = static_cast<CTouchControls::CBindTouchButtonBehavior *>(pTargetButton->m_pBehavior.get());
 			// m_LabelType must not be null. Default value is PLAIN.
 			m_vBehaviorElements[0]->m_CachedCommands = {pTargetBehavior->GetLabel().m_pLabel, pTargetBehavior->GetLabel().m_Type, pTargetBehavior->GetCommand()};
@@ -1204,7 +1204,7 @@ void CMenusIngameTouchControls::CacheAllSettingsFromTarget(CTouchControls::CTouc
 		}
 		else if(str_comp(pBehaviorType, CTouchControls::CBindToggleTouchButtonBehavior::BEHAVIOR_TYPE) == 0)
 		{
-			m_EditBehaviorType = EBehaviorType::BIND_TOGGLE;
+			m_EditBehaviorType = EBehaviorType::B_BIND_TOGGLE;
 			auto *pTargetBehavior = static_cast<CTouchControls::CBindToggleTouchButtonBehavior *>(pTargetButton->m_pBehavior.get());
 			auto TargetCommands = pTargetBehavior->GetCommand();
 			// Can't use resize here :(
@@ -1220,7 +1220,7 @@ void CMenusIngameTouchControls::CacheAllSettingsFromTarget(CTouchControls::CTouc
 		}
 		else if(str_comp(pBehaviorType, CTouchControls::CPredefinedTouchButtonBehavior::BEHAVIOR_TYPE) == 0)
 		{
-			m_EditBehaviorType = EBehaviorType::PREDEFINED;
+			m_EditBehaviorType = EBehaviorType::B_PREDEFINED;
 			auto *pTargetBehavior = static_cast<CTouchControls::CPredefinedTouchButtonBehavior *>(pTargetButton->m_pBehavior.get());
 			const char *pPredefinedType = pTargetBehavior->GetPredefinedType();
 			if(pPredefinedType == nullptr)
@@ -1251,21 +1251,21 @@ void CMenusIngameTouchControls::SaveCachedSettingsToTarget(CTouchControls::CTouc
 	pTargetButton->m_vVisibilities.clear();
 	for(unsigned Iterator = (unsigned)CTouchControls::EButtonVisibility::INGAME; Iterator < (unsigned)CTouchControls::EButtonVisibility::NUM_VISIBILITIES; ++Iterator)
 	{
-		if(m_aCachedVisibilities[Iterator] != EVisibilityType::IGNORE)
-			pTargetButton->m_vVisibilities.emplace_back((CTouchControls::EButtonVisibility)Iterator, m_aCachedVisibilities[Iterator] == EVisibilityType::INCLUDE);
+		if(m_aCachedVisibilities[Iterator] != EVisibilityType::V_IGNORE)
+			pTargetButton->m_vVisibilities.emplace_back((CTouchControls::EButtonVisibility)Iterator, m_aCachedVisibilities[Iterator] == EVisibilityType::V_INCLUDE);
 	}
 	pTargetButton->m_Shape = m_CachedShape;
 	pTargetButton->UpdateScreenFromUnitRect();
 
 	// Make a new behavior class instead of modify the original one.
-	if(m_EditBehaviorType == EBehaviorType::BIND)
+	if(m_EditBehaviorType == EBehaviorType::B_BIND)
 	{
 		pTargetButton->m_pBehavior = std::make_unique<CTouchControls::CBindTouchButtonBehavior>(
 			m_vBehaviorElements[0]->m_CachedCommands.m_Label.c_str(),
 			m_vBehaviorElements[0]->m_CachedCommands.m_LabelType,
 			m_vBehaviorElements[0]->m_CachedCommands.m_Command.c_str());
 	}
-	else if(m_EditBehaviorType == EBehaviorType::BIND_TOGGLE)
+	else if(m_EditBehaviorType == EBehaviorType::B_BIND_TOGGLE)
 	{
 		std::vector<CTouchControls::CBindToggleTouchButtonBehavior::CCommand> vMovingBehavior;
 		vMovingBehavior.reserve(m_vBehaviorElements.size());
@@ -1273,7 +1273,7 @@ void CMenusIngameTouchControls::SaveCachedSettingsToTarget(CTouchControls::CTouc
 			vMovingBehavior.emplace_back(Element->m_CachedCommands);
 		pTargetButton->m_pBehavior = std::make_unique<CTouchControls::CBindToggleTouchButtonBehavior>(std::move(vMovingBehavior));
 	}
-	else if(m_EditBehaviorType == EBehaviorType::PREDEFINED)
+	else if(m_EditBehaviorType == EBehaviorType::B_PREDEFINED)
 	{
 		if(m_PredefinedBehaviorType == EPredefinedType::EXTRA_MENU)
 			pTargetButton->m_pBehavior = std::make_unique<CTouchControls::CExtraMenuTouchButtonBehavior>(CTouchControls::CExtraMenuTouchButtonBehavior(m_CachedExtraMenuNumber));

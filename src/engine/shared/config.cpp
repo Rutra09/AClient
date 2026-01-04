@@ -576,4 +576,80 @@ void CConfigManager::Con_ToggleStroke(IConsole::IResult *pResult, void *pUserDat
 	pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "config", aBuf);
 }
 
+#include <engine/shared/jsonwriter.h>
+#include <engine/external/json-parser/json.h>
+
 IConfigManager *CreateConfigManager() { return new CConfigManager; }
+
+std::string CConfigManager::SaveToJSON()
+{
+	CJsonStringWriter Writer;
+	Writer.BeginObject();
+	Writer.WriteAttribute("settings");
+	Writer.BeginObject();
+
+	for(const SConfigVariable *pVariable : m_vpAllVariables)
+	{
+		if((pVariable->m_Flags & CFGFLAG_SAVE) != 0 && !pVariable->IsDefault())
+		{
+			Writer.WriteAttribute(pVariable->m_pScriptName);
+			if(pVariable->m_Type == SConfigVariable::VAR_INT)
+			{
+				const SIntConfigVariable *pInt = static_cast<const SIntConfigVariable *>(pVariable);
+				Writer.WriteIntValue(*pInt->m_pVariable);
+			}
+			else if(pVariable->m_Type == SConfigVariable::VAR_STRING)
+			{
+				const SStringConfigVariable *pStr = static_cast<const SStringConfigVariable *>(pVariable);
+				Writer.WriteStrValue(pStr->m_pStr);
+			}
+			else if(pVariable->m_Type == SConfigVariable::VAR_COLOR)
+			{
+				const SColorConfigVariable *pCol = static_cast<const SColorConfigVariable *>(pVariable);
+				Writer.WriteIntValue(*pCol->m_pVariable);
+			}
+		}
+	}
+
+	Writer.EndObject();
+	Writer.EndObject();
+	return Writer.GetOutputString();
+}
+
+void CConfigManager::LoadFromJSON(const struct _json_value *pJson)
+{
+	const json_value &Settings = (*pJson)["settings"];
+	if(Settings.type != json_object)
+		return;
+
+	for(unsigned int i = 0; i < Settings.u.object.length; i++)
+	{
+		const char *pName = Settings.u.object.values[i].name;
+		const json_value &Value = *Settings.u.object.values[i].value;
+
+		for(SConfigVariable *pVariable : m_vpAllVariables)
+		{
+			if(str_comp(pVariable->m_pScriptName, pName) == 0)
+			{
+				if(pVariable->m_Type == SConfigVariable::VAR_INT)
+				{
+					if(Value.type == json_integer)
+						static_cast<SIntConfigVariable *>(pVariable)->SetValue(Value.u.integer);
+					else if(Value.type == json_string)
+						static_cast<SIntConfigVariable *>(pVariable)->SetValue(str_toint(Value.u.string.ptr));
+				}
+				else if(pVariable->m_Type == SConfigVariable::VAR_STRING)
+				{
+					if(Value.type == json_string)
+						static_cast<SStringConfigVariable *>(pVariable)->SetValue(Value.u.string.ptr);
+				}
+				else if(pVariable->m_Type == SConfigVariable::VAR_COLOR)
+				{
+					if(Value.type == json_integer)
+						static_cast<SColorConfigVariable *>(pVariable)->SetValue(Value.u.integer);
+				}
+				break;
+			}
+		}
+	}
+}

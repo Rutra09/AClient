@@ -5,72 +5,103 @@
 #include <game/client/ui.h>
 
 #include <memory>
+#include <functional>
+#include <vector>
+#include <array>
+
+enum class ETouchBehaviorType
+{
+	B_BIND,
+	B_BIND_TOGGLE,
+	B_PREDEFINED,
+	NUM_BEHAVIORS
+};
+
+enum class ETouchPredefinedType
+{
+	INGAME_MENU,
+	EXTRA_MENU,
+	EMOTICON,
+	SPECTATE,
+	SWAP_ACTION,
+	USE_ACTION,
+	JOYSTICK_ACTION,
+	JOYSTICK_AIM,
+	JOYSTICK_FIRE,
+	JOYSTICK_HOOK,
+	NUM_PREDEFINEDTYPES
+};
+
+enum class ETouchMenuType
+{
+	TAB_FILE,
+	TAB_BUTTONS,
+	TAB_SETTINGS,
+	TAB_PREVIEW,
+	NUM_MENUS
+};
+
+enum class ETouchSortType
+{
+	SORT_LABEL,
+	SORT_X,
+	SORT_Y,
+	SORT_W,
+	SORT_H,
+	NUM_SORTS
+};
+
+enum class ETouchElementType
+{
+	EDIT_LAYOUT,
+	EDIT_VISIBILITY,
+	EDIT_BEHAVIOR,
+	NUM_ELEMENTS
+};
+
+enum class ETouchVisibilityType
+{
+	V_EXCLUDE,
+	V_INCLUDE,
+	V_IGNORE,
+	NUM_VISIBILITIES
+};
 
 class CMenusIngameTouchControls : public CComponentInterfaces
 {
 public:
+	using EBehaviorType = ETouchBehaviorType;
+	using EPredefinedType = ETouchPredefinedType;
+	using EMenuType = ETouchMenuType;
+	using ESortType = ETouchSortType;
+	using EElementType = ETouchElementType;
+	using EVisibilityType = ETouchVisibilityType;
+	bool UnsavedChanges() const;
+	void SetUnsavedChanges(bool UnsavedChanges);
+	bool CheckCachedSettings() const;
+	void ResetCachedSettings();
+	void CacheAllSettingsFromTarget(CTouchControls::CTouchButton *pTargetButton);
+	void SaveCachedSettingsToTarget(CTouchControls::CTouchButton *pTargetButton) const;
+	void SetPosInputs(CTouchControls::CUnitRect MyRect);
+	CTouchControls::CUnitRect GetPosInputs() const;
+	void InputPosFunction(CLineInputNumber *pInput);
+	void UpdateSampleButton();
+	void ResetButtonPointers();
+	bool NewButton(CTouchControls::CUnitRect Rect, CTouchControls::EButtonShape Shape);
+	void ResolveIssues();
+	int CalculatePredefinedType(const char *pType) const;
+	std::string DetermineTouchButtonCommandLabel(CTouchControls::CTouchButton *pButton) const;
+	const char **VisibilityNames() const;
+	const char **PredefinedNames() const;
+
+	void ChangeSelectedButtonWhileHavingUnsavedChanges() const;
+	void NoSpaceForOverlappingButton() const;
+	void SelectedButtonNotVisible();
+
 	static constexpr const float BUTTON_EDITOR_WIDTH = 700.0f;
-	enum class EBehaviorType
-	{
-		BIND,
-		BIND_TOGGLE,
-		PREDEFINED,
-		NUM_BEHAVIORS
-	};
-
-	enum class EPredefinedType
-	{
-		INGAME_MENU,
-		EXTRA_MENU,
-		EMOTICON,
-		SPECTATE,
-		SWAP_ACTION,
-		USE_ACTION,
-		JOYSTICK_ACTION,
-		JOYSTICK_AIM,
-		JOYSTICK_FIRE,
-		JOYSTICK_HOOK,
-		NUM_PREDEFINEDTYPES
-	};
-
-	// Which menu is selected.
-	enum class EMenuType
-	{
-		MENU_FILE,
-		MENU_BUTTONS,
-		MENU_SETTINGS,
-		MENU_PREVIEW,
-		NUM_MENUS
-	};
-	EMenuType m_CurrentMenu = EMenuType::MENU_FILE;
-
-	enum class ESortType
-	{
-		LABEL,
-		X,
-		Y,
-		W,
-		H,
-		NUM_SORTS
-	};
-	ESortType m_SortType = ESortType::LABEL;
-
-	enum class EElementType
-	{
-		LAYOUT,
-		VISIBILITY,
-		BEHAVIOR,
-		NUM_ELEMENTS
-	};
-	EElementType m_EditElement = EElementType::LAYOUT;
-
-	enum class EVisibilityType
-	{
-		EXCLUDE,
-		INCLUDE,
-		IGNORE,
-		NUM_VISIBILITIES
-	};
+	EMenuType m_CurrentMenu = EMenuType::TAB_FILE;
+	ESortType m_SortType = ESortType::SORT_LABEL;
+	EElementType m_EditElement = EElementType::EDIT_LAYOUT;
 	std::array<EVisibilityType, (size_t)CTouchControls::EButtonVisibility::NUM_VISIBILITIES> m_aCachedVisibilities; // 0:-, 1:+, 2:Ignored.
 
 	// Mainly for passing values in popups.
@@ -84,7 +115,7 @@ public:
 	CLineInputNumber m_InputH;
 	CTouchControls::EButtonShape m_CachedShape;
 
-	EBehaviorType m_EditBehaviorType = EBehaviorType::BIND;
+	EBehaviorType m_EditBehaviorType = EBehaviorType::B_BIND;
 	EPredefinedType m_PredefinedBehaviorType = EPredefinedType::EXTRA_MENU;
 	int m_CachedExtraMenuNumber = 0;
 
@@ -119,8 +150,8 @@ public:
 
 	// Used for creating ui elements.
 	std::array<CButtonContainer, (unsigned)CTouchControls::EButtonVisibility::NUM_VISIBILITIES> m_aVisibilityIds = {};
-	std::array<CButtonContainer, (unsigned)ESortType::NUM_SORTS> m_aSortHeaderIds = {};
-	std::array<CButtonContainer, (unsigned)EElementType::NUM_ELEMENTS> m_aEditElementIds = {};
+	std::array<CButtonContainer, (unsigned)ETouchSortType::NUM_SORTS> m_aSortHeaderIds = {};
+	std::array<CButtonContainer, (unsigned)ETouchElementType::NUM_ELEMENTS> m_aEditElementIds = {};
 
 	// Functional variables.
 	bool m_FirstEnter = true; // Execute something when first opening the editor.
@@ -147,30 +178,7 @@ public:
 
 	// Confirm, Cancel only decide if saving cached settings.
 	void DoPopupType(CTouchControls::CPopupParam PopupParam);
-	void ChangeSelectedButtonWhileHavingUnsavedChanges() const;
-	void NoSpaceForOverlappingButton() const;
-	void SelectedButtonNotVisible();
 
-	// Getter and setters.
-	bool UnsavedChanges() const;
-	void SetUnsavedChanges(bool UnsavedChanges);
-
-	// Convenient functions.
-	bool CheckCachedSettings() const;
-	void ResetCachedSettings();
-	void CacheAllSettingsFromTarget(CTouchControls::CTouchButton *pTargetButton);
-	void SaveCachedSettingsToTarget(CTouchControls::CTouchButton *pTargetButton) const;
-	void SetPosInputs(CTouchControls::CUnitRect MyRect);
-	CTouchControls::CUnitRect GetPosInputs() const;
-	void InputPosFunction(CLineInputNumber *pInput);
-	void UpdateSampleButton();
-	void ResetButtonPointers();
-	bool NewButton(CTouchControls::CUnitRect Rect, CTouchControls::EButtonShape Shape);
-	void ResolveIssues();
-	int CalculatePredefinedType(const char *pType) const;
-	std::string DetermineTouchButtonCommandLabel(CTouchControls::CTouchButton *pButton) const;
-	const char **VisibilityNames() const;
-	const char **PredefinedNames() const;
 
 	class CBehaviorFactoryEditor
 	{

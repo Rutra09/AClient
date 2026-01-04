@@ -246,7 +246,18 @@ bool CHttpRequest::ConfigureHandle(void *pHandle)
 		}
 		else
 		{
-			Header("Content-Type:");
+			// Only set empty Content-Type if none was provided
+			bool HasContentType = false;
+			for(curl_slist *pCur = (curl_slist *)m_pHeaders; pCur; pCur = pCur->next)
+			{
+				if(str_startswith_nocase(pCur->data, "Content-Type:"))
+				{
+					HasContentType = true;
+					break;
+				}
+			}
+			if(!HasContentType)
+				Header("Content-Type:");
 		}
 		curl_easy_setopt(pH, CURLOPT_POSTFIELDS, m_pBody);
 		curl_easy_setopt(pH, CURLOPT_POSTFIELDSIZE, m_BodyLength);
@@ -544,7 +555,7 @@ void CHttpRequest::Result(unsigned char **ppResult, size_t *pResultLength) const
 	*pResultLength = m_ResponseLength;
 }
 
-json_value *CHttpRequest::ResultJson() const
+struct _json_value *CHttpRequest::ResultJson() const
 {
 	unsigned char *pResult;
 	size_t ResultLength;
