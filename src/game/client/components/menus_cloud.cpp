@@ -234,19 +234,19 @@ void CMenus::RenderCloud(CUIRect MainView)
 					Cloud()->GetInventory();
 				}
 				
-				static CButtonContainer s_DownloadAllAssetsButton;
-				if(DoButton_Menu(&s_DownloadAllAssetsButton, Localize("DL All Assets"), 0, &DownloadAllAssetsBtn))
-				{
-					for(int i = 0; i < NumItems; i++)
-					{
-						const CCloud::SInventoryAsset *pAsset = pCloud->GetInventoryAsset(i);
-						if(pAsset && str_find(pAsset->m_aFilename, "assets/"))
-							Cloud()->DownloadAsset(pAsset->m_aFilename);
-					}
-				}
+				// static CButtonContainer s_DownloadAllAssetsButton;
+				// if(DoButton_Menu(&s_DownloadAllAssetsButton, Localize("DL All Assets"), 0, &DownloadAllAssetsBtn))
+				// {
+				// 	for(int i = 0; i < NumItems; i++)
+				// 	{
+				// 		const CCloud::SInventoryAsset *pAsset = pCloud->GetInventoryAsset(i);
+				// 		if(pAsset && str_find(pAsset->m_aFilename, "assets/"))
+				// 			Cloud()->DownloadAsset(pAsset->m_aFilename);
+				// 	}
+				// }
 				
 				static CButtonContainer s_DownloadAllConfigsButton;
-				if(DoButton_Menu(&s_DownloadAllConfigsButton, Localize("DL All Configs"), 0, &DownloadAllConfigsBtn))
+				if(DoButton_Menu(&s_DownloadAllConfigsButton, Localize("DL Configs"), 0, &DownloadAllConfigsBtn))
 				{
 					for(int i = 0; i < NumItems; i++)
 					{

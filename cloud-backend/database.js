@@ -1,7 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, 'cloud.db');
+const dbPath = process.env.DB_PATH ? path.resolve(__dirname, process.env.DB_PATH) : path.resolve(__dirname, 'cloud.db');
 
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
@@ -36,6 +36,7 @@ function initDb() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
+            local_path TEXT,
             path TEXT NOT NULL,
             size INTEGER,
             version INTEGER DEFAULT 1,

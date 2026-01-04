@@ -6,11 +6,12 @@ const db = require('../database');
 const authenticateToken = require('../middleware/authMiddleware');
 
 const router = express.Router();
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
 // Configure multer for multipart uploads (optional, but good to have)
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/')
+        cb(null, UPLOAD_DIR)
     },
     filename: function (req, file, cb) {
         cb(null, req.user.id + '-' + Date.now() + '-' + file.originalname)
@@ -77,6 +78,7 @@ router.post('/', authenticateToken, (req, res) => {
     }
 
     const filename = req.headers['x-filename'];
+    const localPath = req.headers['x-local-path'] || filename; // Original local path for download
     if (!filename) {
         return res.status(400).json({ error: 'Missing X-Filename header' });
     }
@@ -94,13 +96,13 @@ router.post('/', authenticateToken, (req, res) => {
                 if (err) return res.status(500).json({ error: err.message });
                 
                 const newVersion = (row && row.max_version) ? row.max_version + 1 : 1;
-                const targetPath = path.join('uploads', userId + '-v' + newVersion + '-' + Date.now() + '-' + safeFilename);
+                const targetPath = path.join(UPLOAD_DIR, userId + '-v' + newVersion + '-' + Date.now() + '-' + safeFilename);
                 
                 fs.writeFile(targetPath, req.body, (err) => {
                     if (err) return res.status(500).json({ error: err.message });
 
-                    db.run(`INSERT INTO assets (user_id, filename, path, size, version) VALUES (?, ?, ?, ?, ?)`,
-                        [userId, safeFilename, targetPath, req.body.length, newVersion],
+                    db.run(`INSERT INTO assets (user_id, filename, local_path, path, size, version) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [userId, safeFilename, localPath, targetPath, req.body.length, newVersion],
                         function(err) {
                             if (err) return res.status(500).json({ error: err.message });
                             
@@ -127,7 +129,9 @@ router.get('/inventory', authenticateToken, (req, res) => {
     const userId = req.user.id;
     
     // Get all assets grouped by filename with latest version info
-    db.all(`SELECT filename, MAX(version) as latest_version, 
+    db.all(`SELECT filename, 
+                   (SELECT local_path FROM assets a2 WHERE a2.user_id = assets.user_id AND a2.filename = assets.filename ORDER BY version DESC LIMIT 1) as local_path,
+                   MAX(version) as latest_version, 
                    COUNT(*) as version_count,
                    SUM(size) as total_size,
                    MAX(created_at) as last_updated
@@ -161,7 +165,7 @@ router.get('/inventory', authenticateToken, (req, res) => {
 router.get('/versions/:filename', authenticateToken, (req, res) => {
     const filename = req.params.filename;
     
-    db.all(`SELECT version, size, created_at, path 
+    db.all(`SELECT version, size, created_at, path, local_path 
             FROM assets 
             WHERE user_id = ? AND filename = ? 
             ORDER BY version DESC`,

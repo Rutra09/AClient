@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../database');
 
 const router = express.Router();
-const SECRET_KEY = 'your-secret-key-change-in-production'; // Must match authMiddleware.js
+const SECRET_KEY = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Register
 router.post('/register', (req, res) => {

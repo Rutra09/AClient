@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -20,28 +21,29 @@ app.set('views', path.join(__dirname, 'views'));
 // Session configuration
 app.use(cookieParser());
 app.use(session({
-    secret: 'your-secret-key-change-in-production',
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true in production with HTTPS
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        secure: process.env.SESSION_SECURE === 'true',
+        httpOnly: process.env.SESSION_HTTP_ONLY !== 'false',
+        maxAge: parseInt(process.env.SESSION_MAX_AGE) || 86400000
     }
 }));
 
 app.use(cors({
-    origin: true,
+    origin: process.env.CORS_ORIGIN || true,
     credentials: true
 }));
-app.use('/api/assets', express.raw({ type: () => true, limit: '20mb' }));
+app.use('/api/assets', express.raw({ type: () => true, limit: process.env.MAX_FILE_SIZE || '20mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Ensure uploads directory exists
 const fs = require('fs');
-if (!fs.existsSync('uploads')){
-    fs.mkdirSync('uploads');
+const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+if (!fs.existsSync(uploadsDir)){
+    fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // API Routes

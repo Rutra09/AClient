@@ -149,3 +149,4 @@ tags
 cloud-backend/node_modules/
 cloud-backend/uploads/
 cloud-backend/*.db
+cloud-backend/.env

@@ -3128,8 +3128,12 @@ void CClient::InitInterfaces()
 	m_GhostRecorder.Init();
 	m_GhostLoader.Init();
 
-	m_pCloud = std::make_unique<CCloud>(this, m_pEngine, &m_Http, m_pStorage, m_pConfigManager);
+	m_pCloud = std::make_unique<CCloud>(this, m_pEngine, &m_Http, m_pStorage, m_pConfigManager, m_pConsole);
 	Kernel()->RegisterInterface(m_pCloud.get());
+	
+	// Link GameClient to Cloud for JSON reload support
+	if(m_pCloud && m_pGameClient)
+		m_pCloud->SetGameClient(m_pGameClient);
 }
 
 void CClient::Run()
