@@ -1,10 +1,11 @@
-const express = require('express');
+﻿const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const db = require('../database');
 const { requireAuth, requireAdmin } = require('../middleware/sessionAuth');
 const fs = require('fs');
 const path = require('path');
+const { ObjectId } = require('mongodb');
+const database = require('../database');
 
 const router = express.Router();
 
@@ -17,11 +18,15 @@ router.get('/login', (req, res) => {
 });
 
 // Login POST
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (err || !user) {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const user = await db.collection('users').findOne({ username });
+        
+        if (!user) {
             return res.render('admin/login', { error: 'Invalid credentials' });
         }
         
@@ -35,16 +40,23 @@ router.post('/login', (req, res) => {
         }
         
         // Set session
-        req.session.userId = user.id;
+        req.session.userId = user._id.toString();
         req.session.username = user.username;
         req.session.role = user.role;
         
         // Log activity
-        db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [user.id, 'admin_login', 'Admin logged in']);
+        await db.collection('activity_log').insertOne({
+            user_id: user._id.toString(),
+            action: 'admin_login',
+            details: 'Admin logged in',
+            created_at: new Date()
+        });
         
         res.redirect('/api/admin/dashboard');
-    });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.render('admin/login', { error: 'Server error' });
+    }
 });
 
 // Logout
@@ -68,141 +80,237 @@ router.use(requireAuth);
 router.use(requireAdmin);
 
 // Get all users
-router.get('/users', (req, res) => {
-    db.all(`SELECT u.id, u.username, u.role, u.created_at,
-                   ul.max_versions, ul.max_storage_mb,
-                   COUNT(DISTINCT a.filename) as file_count,
-                   SUM(a.size) as total_size
-            FROM users u
-            LEFT JOIN user_limits ul ON u.id = ul.user_id
-            LEFT JOIN assets a ON u.id = a.user_id
-            GROUP BY u.id
-            ORDER BY u.created_at DESC`,
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ users: rows });
-        }
-    );
+router.get('/users', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        
+        const users = await db.collection('users').aggregate([
+            {
+                $lookup: {
+                    from: 'user_limits',
+                    localField: '_id',
+                    foreignField: 'user_id',
+                    as: 'limits'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'assets',
+                    localField: '_id',
+                    foreignField: 'user_id',
+                    as: 'assets'
+                }
+            },
+            {
+                $project: {
+                    id: { $toString: '$_id' },
+                    username: 1,
+                    role: 1,
+                    created_at: 1,
+                    max_versions: { $ifNull: [{ $arrayElemAt: ['$limits.max_versions', 0] }, 3] },
+                    max_storage_mb: { $ifNull: [{ $arrayElemAt: ['$limits.max_storage_mb', 0] }, 100] },
+                    file_count: { $size: { $setUnion: ['$assets.filename', []] } },
+                    total_size: { $ifNull: [{ $sum: '$assets.size' }, 0] }
+                }
+            },
+            { $sort: { created_at: -1 } }
+        ]).toArray();
+        
+        res.json({ users });
+    } catch (err) {
+        console.error('Get users error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Get user details
-router.get('/users/:id', (req, res) => {
-    const userId = req.params.id;
-    
-    db.get(`SELECT u.*, ul.max_versions, ul.max_storage_mb
-            FROM users u
-            LEFT JOIN user_limits ul ON u.id = ul.user_id
-            WHERE u.id = ?`, [userId],
-        (err, user) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!user) return res.status(404).json({ error: 'User not found' });
-            
-            // Get user's files
-            db.all(`SELECT filename, MAX(version) as latest_version, 
-                           COUNT(*) as version_count, SUM(size) as total_size,
-                           MAX(created_at) as last_updated
-                    FROM assets 
-                    WHERE user_id = ? 
-                    GROUP BY filename`,
-                [userId],
-                (err, files) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    
-                    res.json({ user, files });
+router.get('/users/:id', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const userId = new ObjectId(req.params.id);
+        
+        const user = await db.collection('users').aggregate([
+            { $match: { _id: userId } },
+            {
+                $lookup: {
+                    from: 'user_limits',
+                    localField: '_id',
+                    foreignField: 'user_id',
+                    as: 'limits'
                 }
-            );
+            },
+            {
+                $project: {
+                    id: { $toString: '$_id' },
+                    username: 1,
+                    role: 1,
+                    created_at: 1,
+                    max_versions: { $ifNull: [{ $arrayElemAt: ['$limits.max_versions', 0] }, 3] },
+                    max_storage_mb: { $ifNull: [{ $arrayElemAt: ['$limits.max_storage_mb', 0] }, 100] }
+                }
+            }
+        ]).toArray();
+        
+        if (!user || user.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
         }
-    );
-    db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [user.id, 'admin_login', 'User details retrieved']);
+        
+        const files = await db.collection('assets').aggregate([
+            { $match: { user_id: userId } },
+            {
+                $group: {
+                    _id: '$filename',
+                    latest_version: { $max: '$version' },
+                    version_count: { $sum: 1 },
+                    total_size: { $sum: '$size' },
+                    last_updated: { $max: '$created_at' }
+                }
+            },
+            {
+                $project: {
+                    filename: '$_id',
+                    latest_version: 1,
+                    version_count: 1,
+                    total_size: 1,
+                    last_updated: 1
+                }
+            }
+        ]).toArray();
+        
+        res.json({ user: user[0], files });
+    } catch (err) {
+        console.error('Get user details error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Update user limits
-router.put('/users/:id/limits', (req, res) => {
-    const userId = req.params.id;
-    const { max_versions, max_storage_mb } = req.body;
-    
-    if (!max_versions || !max_storage_mb) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    
-    // Insert or update user limits
-    db.run(`INSERT INTO user_limits (user_id, max_versions, max_storage_mb)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                max_versions = excluded.max_versions,
-                max_storage_mb = excluded.max_storage_mb`,
-        [userId, max_versions, max_storage_mb],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            // Log activity
-            db.run(`INSERT INTO activity_log (user_id, action, details)
-                    VALUES (?, 'limits_updated', ?)`,
-                [req.session.userId, `Updated limits for user ${userId}: ${max_versions} versions, ${max_storage_mb} MB`]
-            );
-            
-            res.json({ message: 'Limits updated successfully' });
+router.put('/users/:id/limits', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const userId = new ObjectId(req.params.id);
+        const { max_versions, max_storage_mb } = req.body;
+        
+        if (!max_versions || !max_storage_mb) {
+            return res.status(400).json({ error: 'Missing required fields' });
         }
-    );
-    db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [req.session.userId, 'admin_login', 'User limits updated']);
+        
+        await db.collection('user_limits').updateOne(
+            { user_id: userId },
+            { 
+                $set: { 
+                    max_versions: parseInt(max_versions),
+                    max_storage_mb: parseInt(max_storage_mb)
+                }
+            },
+            { upsert: true }
+        );
+        
+        await db.collection('activity_log').insertOne({
+            user_id: req.session.userId,
+            action: 'limits_updated',
+            details: `Updated limits for user ${userId}: ${max_versions} versions, ${max_storage_mb} MB`,
+            created_at: new Date()
+        });
+        
+        res.json({ message: 'Limits updated successfully' });
+    } catch (err) {
+        console.error('Update limits error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Update user role
-router.put('/users/:id/role', (req, res) => {
-    const userId = req.params.id;
-    const { role } = req.body;
-    
-    if (!role || !['user', 'admin'].includes(role)) {
-        return res.status(400).json({ error: 'Invalid role' });
-    }
-    
-    db.run(`UPDATE users SET role = ? WHERE id = ?`,
-        [role, userId],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            // Log activity
-            db.run(`INSERT INTO activity_log (user_id, action, details)
-                    VALUES (?, 'role_updated', ?)`,
-                [req.session.userId, `Changed user ${userId} role to ${role}`]
-            );
-            
-            res.json({ message: 'Role updated successfully' });
+router.put('/users/:id/role', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const userId = new ObjectId(req.params.id);
+        const { role } = req.body;
+        
+        if (!role || !['user', 'admin'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role' });
         }
-    );
-    db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [req.session.userId, 'admin_login', 'User role updated']);
+        
+        await db.collection('users').updateOne(
+            { _id: userId },
+            { $set: { role } }
+        );
+        
+        await db.collection('activity_log').insertOne({
+            user_id: req.session.userId,
+            action: 'role_updated',
+            details: `Changed user ${userId} role to ${role}`,
+            created_at: new Date()
+        });
+        
+        res.json({ message: 'Role updated successfully' });
+    } catch (err) {
+        console.error('Update role error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Get all files across all users
-router.get('/files', (req, res) => {
-    db.all(`SELECT a.*, u.username
-            FROM assets a
-            JOIN users u ON a.user_id = u.id
-            ORDER BY a.created_at DESC
-            LIMIT 100`,
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ files: rows });
-        }
-    );
-    db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [req.session.userId, 'admin_login', 'All files retrieved']);
+router.get('/files', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        
+        const files = await db.collection('assets').aggregate([
+            {
+                $addFields: {
+                    user_id_obj: { $cond: { if: { $eq: [{ $type: '$user_id' }, 'objectId'] }, then: '$user_id', else: { $toObjectId: '$user_id' } } }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user_id_obj',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $project: {
+                    id: { $toString: '$_id' },
+                    user_id: { $cond: { if: { $eq: [{ $type: '$user_id' }, 'objectId'] }, then: { $toString: '$user_id' }, else: '$user_id' } },
+                    username: { $arrayElemAt: ['$user.username', 0] },
+                    filename: 1,
+                    version: 1,
+                    size: 1,
+                    created_at: 1,
+                    path: 1
+                }
+            },
+            { $sort: { created_at: -1 } },
+            { $limit: 100 }
+        ]).toArray();
+        
+        res.json({ files });
+    } catch (err) {
+        console.error('Get files error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // View file content
-router.get('/files/:id/content', (req, res) => {
-    const fileId = req.params.id;
-    
-    db.get(`SELECT * FROM assets WHERE id = ?`, [fileId], (err, file) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!file) return res.status(404).json({ error: 'File not found' });
+router.get('/files/:id/content', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const fileId = new ObjectId(req.params.id);
+        
+        const file = await db.collection('assets').findOne({ _id: fileId });
+        if (!file) {
+            return res.status(404).json({ error: 'File not found' });
+        }
         
         fs.readFile(file.path, 'utf8', (err, content) => {
             if (err) {
-                // Try reading as binary if UTF-8 fails
                 fs.readFile(file.path, (err, buffer) => {
                     if (err) return res.status(500).json({ error: 'Failed to read file' });
                     res.json({ 
@@ -211,10 +319,14 @@ router.get('/files/:id/content', (req, res) => {
                         encoding: 'base64'
                     });
                 });
-            } else { 
-                db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-            [req.session.userId, 'admin_login', 'File content retrieved for file ' + fileId + " which belongs to user " + file.user_id]);
-
+            } else {
+                db.collection('activity_log').insertOne({
+                    user_id: req.session.userId,
+                    action: 'file_viewed',
+                    details: `File content retrieved for ${file.filename}`,
+                    created_at: new Date()
+                });
+                
                 res.json({ 
                     file,
                     content,
@@ -222,132 +334,215 @@ router.get('/files/:id/content', (req, res) => {
                 });
             }
         });
-    });
-   });
+    } catch (err) {
+        console.error('View file error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Get activity log
-router.get('/activity', (req, res) => {
-    const limit = req.query.limit || 50;
-    
-    db.all(`SELECT al.*, u.username
-            FROM activity_log al
-            LEFT JOIN users u ON al.user_id = u.id
-            ORDER BY al.created_at DESC
-            LIMIT ?`,
-        [limit],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ activity: rows });
-            db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-                    [req.session.userId, 'admin_login', 'Activity log retrieved']);
-        }
-    );
+router.get('/activity', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const limit = parseInt(req.query.limit) || 50;
+        
+        const activity = await db.collection('activity_log').aggregate([
+            {
+                $addFields: {
+                    user_id_obj: { $toObjectId: '$user_id' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user_id_obj',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $project: {
+                    username: { $arrayElemAt: ['$user.username', 0] },
+                    action: 1,
+                    details: 1,
+                    created_at: 1
+                }
+            },
+            { $sort: { created_at: -1 } },
+            { $limit: limit }
+        ]).toArray();
+        
+        res.json({ activity });
+    } catch (err) {
+        console.error('Get activity error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Get statistics
-router.get('/stats', (req, res) => {
-    const stats = {};
-    
-    // Total users
-    db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        stats.total_users = row.count;
-        db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-                [req.session.userId, 'admin_login', 'Statistics retrieved']);
+router.get('/stats', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
         
-        // Total files
-        db.get('SELECT COUNT(*) as count, SUM(size) as total_size FROM assets', (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            stats.total_files = row.count;
-            stats.total_size = row.total_size || 0;
-            
-            // Recent activity
-            db.get('SELECT COUNT(*) as count FROM activity_log WHERE created_at > datetime("now", "-24 hours")', (err, row) => {
-                if (err) return res.status(500).json({ error: err.message });
-                stats.recent_activity = row.count;
-                
-                res.json(stats);
-            });
+        const totalUsers = await db.collection('users').countDocuments();
+        const assetStats = await db.collection('assets').aggregate([
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    total_size: { $sum: '$size' }
+                }
+            }
+        ]).toArray();
+        
+        const yesterday = new Date();
+        yesterday.setHours(yesterday.getHours() - 24);
+        const recentActivity = await db.collection('activity_log').countDocuments({
+            created_at: { $gte: yesterday }
         });
-    });
+        
+        res.json({
+            total_users: totalUsers,
+            total_files: assetStats[0]?.count || 0,
+            total_size: assetStats[0]?.total_size || 0,
+            recent_activity: recentActivity
+        });
+    } catch (err) {
+        console.error('Get stats error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Generate password reset link for user
-router.post('/users/:id/reset-token', (req, res) => {
-    const userId = req.params.id;
-    const { expiresInHours } = req.body;
-    
-    // Check if user exists
-    db.get('SELECT id, username FROM users WHERE id = ?', [userId], (err, user) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(404).json({ error: 'User not found' });
+router.post('/users/:id/reset-token', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const userId = new ObjectId(req.params.id);
+        const { expiresInHours } = req.body;
         
-        // Generate secure token
+        const user = await db.collection('users').findOne(
+            { _id: userId },
+            { projection: { _id: 1, username: 1 } }
+        );
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
         const token = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + (expiresInHours || 24));
         
-        // Insert token into database
-        db.run(`INSERT INTO password_reset_tokens (user_id, token, created_by, expires_at) 
-                VALUES (?, ?, ?, ?)`,
-            [userId, token, req.session.userId, expiresAt.toISOString()],
-            function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                
-                // Log activity
-                db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-                    [req.session.userId, 'generate_reset_token', `Generated reset token for user ${user.username}`]);
-                
-                const resetLink = `${req.protocol}://${req.get('host')}/api/auth/reset-password?token=${token}`;
-                
-                res.json({ 
-                    token,
-                    resetLink,
-                    expiresAt,
-                    user: {
-                        id: user.id,
-                        username: user.username
-                    }
-                });
+        await db.collection('password_reset_tokens').insertOne({
+            user_id: userId.toString(),
+            token,
+            created_by: req.session.userId,
+            used: 0,
+            created_at: new Date(),
+            expires_at: expiresAt
+        });
+        
+        await db.collection('activity_log').insertOne({
+            user_id: req.session.userId,
+            action: 'generate_reset_token',
+            details: `Generated reset token for user ${user.username}`,
+            created_at: new Date()
+        });
+        
+        const resetLink = `${req.protocol}://${req.get('host')}/api/auth/reset-password?token=${token}`;
+        
+        res.json({ 
+            token,
+            resetLink,
+            expiresAt,
+            user: {
+                id: user._id.toString(),
+                username: user.username
             }
-        );
-    });
+        });
+    } catch (err) {
+        console.error('Generate reset token error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Get active reset tokens for a user
-router.get('/users/:id/reset-tokens', (req, res) => {
-    const userId = req.params.id;
-    
-    db.all(`SELECT t.*, u.username as created_by_username
-            FROM password_reset_tokens t
-            LEFT JOIN users u ON t.created_by = u.id
-            WHERE t.user_id = ? AND t.used = 0 AND datetime(t.expires_at) > datetime('now')
-            ORDER BY t.created_at DESC`,
-        [userId],
-        (err, tokens) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ tokens });
-        }
-    );
+router.get('/users/:id/reset-tokens', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const userId = req.params.id;
+        
+        const tokens = await db.collection('password_reset_tokens').aggregate([
+            {
+                $match: {
+                    user_id: userId,
+                    used: 0,
+                    expires_at: { $gt: new Date() }
+                }
+            },
+            {
+                $addFields: {
+                    created_by_obj: { $toObjectId: '$created_by' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'created_by_obj',
+                    foreignField: '_id',
+                    as: 'creator'
+                }
+            },
+            {
+                $project: {
+                    token: 1,
+                    created_at: 1,
+                    expires_at: 1,
+                    created_by_username: { $arrayElemAt: ['$creator.username', 0] }
+                }
+            },
+            { $sort: { created_at: -1 } }
+        ]).toArray();
+        
+        res.json({ tokens });
+    } catch (err) {
+        console.error('Get reset tokens error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Revoke reset token
-router.delete('/reset-tokens/:token', (req, res) => {
-    const token = req.params.token;
-    
-    db.run('UPDATE password_reset_tokens SET used = 1 WHERE token = ?',
-        [token],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: 'Token not found' });
-            
-            db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-                [req.session.userId, 'revoke_reset_token', `Revoked reset token ${token}`]);
-            
-            res.json({ message: 'Token revoked successfully' });
+router.delete('/reset-tokens/:token', async (req, res) => {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const token = req.params.token;
+        
+        const result = await db.collection('password_reset_tokens').updateOne(
+            { token },
+            { $set: { used: 1 } }
+        );
+        
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Token not found' });
         }
-    );
+        
+        await db.collection('activity_log').insertOne({
+            user_id: req.session.userId,
+            action: 'revoke_reset_token',
+            details: `Revoked reset token ${token}`,
+            created_at: new Date()
+        });
+        
+        res.json({ message: 'Token revoked successfully' });
+    } catch (err) {
+        console.error('Revoke token error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
-
 
 module.exports = router;

@@ -1,73 +1,120 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../database');
+const { ObjectId } = require('mongodb');
+const database = require('../database');
 
 const router = express.Router();
 const SECRET_KEY = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Register
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const hash = bcrypt.hashSync(password, 10);
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const hash = await bcrypt.hash(password, 10);
 
-    db.run(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, [username, hash], function(err) {
-        if (err) {
-            if (err.message.includes('UNIQUE constraint failed')) {
-                return res.status(409).json({ error: 'Username already exists' });
-            }
-            return res.status(500).json({ error: err.message });
+        const result = await db.collection('users').insertOne({
+            username,
+            password_hash: hash,
+            role: 'user',
+            created_at: new Date()
+        });
+
+        const userId = result.insertedId.toString();
+        const token = jwt.sign({ id: userId, username }, SECRET_KEY, { expiresIn: '1h' });
+        res.json({ token, userId });
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(409).json({ error: 'Username already exists' });
         }
-
-        const token = jwt.sign({ id: this.lastID, username }, SECRET_KEY, { expiresIn: '1h' });
-        res.json({ token, userId: this.lastID });
-    });
+        console.error('Register error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ error: 'Username and password required' });
     }
 
-    db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, user) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        const user = await db.collection('users').findOne({ username });
 
-        if (!bcrypt.compareSync(password, user.password_hash)) {
+        if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '1h' });
-        res.json({ token, userId: user.id });
-    });
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const userId = user._id.toString();
+        const token = jwt.sign({ id: userId, username: user.username }, SECRET_KEY, { expiresIn: '1h' });
+        res.json({ token, userId });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Show reset password form
-router.get('/reset-password', (req, res) => {
+router.get('/reset-password', async (req, res) => {
     const { token } = req.query;
     
     if (!token) {
         return res.status(400).send('Invalid or missing reset token');
     }
     
-    // Check if token is valid
-    db.get(`SELECT t.*, u.username 
-            FROM password_reset_tokens t
-            JOIN users u ON t.user_id = u.id
-            WHERE t.token = ? AND t.used = 0 AND datetime(t.expires_at) > datetime('now')`,
-        [token],
-        (err, tokenData) => {
-            if (err) return res.status(500).send('Database error');
-            if (!tokenData) return res.status(400).send('Invalid or expired reset token');
-            
-            // Render reset password form
-            res.send(`
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        
+        const tokenData = await db.collection('password_reset_tokens').aggregate([
+            {
+                $match: {
+                    token,
+                    used: 0,
+                    expires_at: { $gt: new Date() }
+                }
+            },
+            {
+                $addFields: {
+                    user_id_obj: { $toObjectId: '$user_id' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user_id_obj',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $project: {
+                    username: { $arrayElemAt: ['$user.username', 0] },
+                    user_id: 1
+                }
+            }
+        ]).toArray();
+        
+        if (!tokenData || tokenData.length === 0) {
+            return res.status(400).send('Invalid or expired reset token');
+        }
+        
+        // Render reset password form
+        res.send(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -84,7 +131,7 @@ router.get('/reset-password', (req, res) => {
     </style>
 </head>
 <body>
-    <h2>Reset Password for ${tokenData.username}</h2>
+    <h2>Reset Password for ${tokenData[0].username}</h2>
     <form id="resetForm">
         <div class="form-group">
             <label>New Password:</label>
@@ -135,13 +182,15 @@ router.get('/reset-password', (req, res) => {
     </script>
 </body>
 </html>
-            `);
-        }
-    );
+        `);
+    } catch (err) {
+        console.error('Reset password form error:', err);
+        res.status(500).send('Server error');
+    }
 });
 
 // Reset password with token
-router.post('/reset-password', (req, res) => {
+router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body;
     
     if (!token || !password) {
@@ -152,36 +201,48 @@ router.post('/reset-password', (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
     
-    // Verify token
-    db.get(`SELECT * FROM password_reset_tokens 
-            WHERE token = ? AND used = 0 AND datetime(expires_at) > datetime('now')`,
-        [token],
-        (err, tokenData) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!tokenData) return res.status(400).json({ error: 'Invalid or expired token' });
-            
-            // Hash new password
-            const hash = bcrypt.hashSync(password, 10);
-            
-            // Update user password
-            db.run('UPDATE users SET password_hash = ? WHERE id = ?',
-                [hash, tokenData.user_id],
-                (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    
-                    // Mark token as used
-                    db.run('UPDATE password_reset_tokens SET used = 1 WHERE token = ?', [token]);
-                    
-                    // Log activity
-                    db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
-                        [tokenData.user_id, 'password_reset', 'Password reset via admin token']);
-                    
-                    res.json({ message: 'Password reset successfully' });
-                }
-            );
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        
+        const tokenData = await db.collection('password_reset_tokens').findOne({
+            token,
+            used: 0,
+            expires_at: { $gt: new Date() }
+        });
+        
+        if (!tokenData) {
+            return res.status(400).json({ error: 'Invalid or expired token' });
         }
-    );
+        
+        const hash = await bcrypt.hash(password, 10);
+        const userId = new ObjectId(tokenData.user_id);
+        
+        await db.collection('users').updateOne(
+            { _id: userId },
+            { $set: { password_hash: hash } }
+        );
+        
+        await db.collection('password_reset_tokens').updateOne(
+            { token },
+            { $set: { used: 1 } }
+        );
+        
+        await db.collection('activity_log').insertOne({
+            user_id: tokenData.user_id,
+            action: 'password_reset',
+            details: 'Password reset via admin token',
+            created_at: new Date()
+        });
+        
+        res.json({ message: 'Password reset successfully' });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 
 module.exports = router;
+
+

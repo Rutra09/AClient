@@ -35,7 +35,6 @@ app.use(cors({
     origin: process.env.CORS_ORIGIN || true,
     credentials: true
 }));
-app.use('/api/assets', express.raw({ type: () => true, limit: process.env.MAX_FILE_SIZE || '20mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,7 +55,13 @@ app.get('/', (req, res) => {
     res.send('Cloud Backend Running - <a href="/api/admin/login">Admin Login</a>');
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Admin login: http://localhost:${PORT}/api/admin/login`);
+// Initialize database and start server
+db.connectDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Admin login: http://localhost:${PORT}/api/admin/login`);
+    });
+}).catch(err => {
+    console.error('Failed to connect to database:', err);
+    process.exit(1);
 });

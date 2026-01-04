@@ -523,10 +523,10 @@
                         <td>${((user.total_size || 0) / 1024).toFixed(2)} KB</td>
                         <td>${user.max_versions || 3} versions / ${user.max_storage_mb || 100} MB</td>
                         <td>
-                            <button class="btn btn-primary" onclick="editLimits(${user.id}, '${user.username}', ${user.max_versions || 3}, ${user.max_storage_mb || 100})">
+                            <button class="btn btn-primary" onclick="editLimits('${user.id}', '${user.username}', ${user.max_versions || 3}, ${user.max_storage_mb || 100})">
                                 Edit Limits
                             </button>
-                            <button class="btn btn-secondary" onclick="generateResetLink(${user.id}, '${user.username}')">
+                            <button class="btn btn-secondary" onclick="generateResetLink('${user.id}', '${user.username}')">
                                 Reset Password
                             </button>
                         </td>
@@ -557,7 +557,7 @@
                         <td>${(file.size / 1024).toFixed(2)} KB</td>
                         <td>${new Date(file.created_at).toLocaleString()}</td>
                         <td>
-                            <button class="btn btn-secondary" onclick="viewFile(${file.id}, '${file.filename}')">
+                            <button class="btn btn-secondary" onclick="viewFile('${file.id}', '${file.filename}')">
                                 View
                             </button>
                         </td>

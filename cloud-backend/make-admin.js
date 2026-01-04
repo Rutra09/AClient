@@ -1,5 +1,6 @@
 require('dotenv').config();
-const db = require('./database');
+const { ObjectId } = require('mongodb');
+const database = require('./database');
 
 const username = process.argv[2];
 
@@ -9,13 +10,12 @@ if (!username) {
     process.exit(1);
 }
 
-// Wait for database to initialize
-setTimeout(() => {
-    db.get('SELECT id, username, role FROM users WHERE username = ?', [username], (err, user) => {
-        if (err) {
-            console.error('Database error:', err);
-            process.exit(1);
-        }
+async function makeAdmin() {
+    try {
+        await database.connectDB();
+        const db = database.getDatabase();
+        
+        const user = await db.collection('users').findOne({ username });
         
         if (!user) {
             console.error(`User "${username}" not found.`);
@@ -28,14 +28,17 @@ setTimeout(() => {
             process.exit(0);
         }
         
-        db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id], (err) => {
-            if (err) {
-                console.error('Error updating user role:', err);
-                process.exit(1);
-            }
-            
-            console.log(`✓ User "${username}" (ID: ${user.id}) is now an admin!`);
-            process.exit(0);
-        });
-    });
-}, 1000);
+        await db.collection('users').updateOne(
+            { _id: user._id },
+            { $set: { role: 'admin' } }
+        );
+
+        console.log(`✓ User "${username}" (ID: ${user._id}) is now an admin!`);
+        process.exit(0);
+    } catch (err) {
+        console.error('Error:', err);
+        process.exit(1);
+    }
+}
+
+makeAdmin();

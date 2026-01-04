@@ -1,15 +1,35 @@
 const { MongoClient, ObjectId } = require('mongodb');
 
-const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/cloud_db';
+// Build URI from components if password contains special characters
+let uri;
+if (process.env.MONGODB_USERNAME && process.env.MONGODB_PASSWORD) {
+    const username = encodeURIComponent(process.env.MONGODB_USERNAME);
+    const password = encodeURIComponent(process.env.MONGODB_PASSWORD);
+    const host = process.env.MONGODB_HOST || 'localhost:27017';
+    const database = process.env.MONGODB_DATABASE || 'cloud_db';
+    uri = `mongodb://${username}:${password}@${host}/${database}`;
+} else {
+    uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/cloud_db';
+}
+
 const client = new MongoClient(uri);
 
 let database;
 let collections = {};
+let connecting = null; // Track connection promise
 
 async function connect() {
-    try {
-        await client.connect();
-        database = client.db();
+    // If already connecting, return the existing promise
+    if (connecting) return connecting;
+    
+    // If already connected, return immediately
+    if (database) return database;
+    
+    // Start new connection
+    connecting = (async () => {
+        try {
+            await client.connect();
+            database = client.db();
         
         // Initialize collections
         collections.users = database.collection('users');
@@ -25,16 +45,27 @@ async function connect() {
         await collections.password_reset_tokens.createIndex({ token: 1, used: 1, expires_at: 1 });
         
         console.log('Connected to MongoDB database');
+        connecting = null; // Clear the promise
+        
         return database;
     } catch (err) {
         console.error('MongoDB connection error:', err);
+        connecting = null; // Clear the promise on error
         throw err;
     }
+    })()
+    
+    
+    return connecting;
 }
 
 // Wrapper to make MongoDB work with SQLite-like syntax
 const db = {
     run: async (query, params, callback) => {
+        // Ensure connection is established
+        if (!database) {
+            await connect();
+        }
         try {
             // Parse basic SQL-like operations
             if (query.includes('INSERT INTO users')) {
@@ -143,6 +174,10 @@ const db = {
     },
     
     get: async (query, params, callback) => {
+        // Ensure connection is established
+        if (!database) {
+            await connect();
+        }
         try {
             let result = null;
             
@@ -215,6 +250,10 @@ const db = {
         } catch (err) {
             console.error('MongoDB get error:', err);
             if (callback) callback(err, null);
+        // Ensure connection is established
+        if (!database) {
+            await connect();
+        }
         }
     },
     
@@ -348,4 +387,10 @@ const db = {
 // Initialize connection
 connect().catch(console.error);
 
-module.exports = db;
+// Export both the compatibility layer and direct access
+module.exports = {
+    db,
+    connectDB: connect,
+    getDatabase: () => database,
+    getCollections: () => collections
+};
