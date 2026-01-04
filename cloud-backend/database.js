@@ -3,7 +3,11 @@ const path = require('path');
 const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 let db;
 
-if (DB_TYPE === 'postgres') {
+if (DB_TYPE === 'mongodb') {
+    // MongoDB connection
+    db = require('./database-mongodb');
+    module.exports = db;
+} else if (DB_TYPE === 'postgres') {
     // PostgreSQL connection
     const { Pool } = require('pg');
     
@@ -18,12 +22,16 @@ if (DB_TYPE === 'postgres') {
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
     });
+                    console.log( `User: ${process.env.DB_USER}, Host: ${process.env.DB_HOST}, Database: ${process.env.DB_NAME} Password: ${process.env.DB_PASSWORD}` );
+
 
     pool.on('connect', () => {
+
         console.log('Connected to PostgreSQL database');
     });
 
     pool.on('error', (err) => {
+        // log user, host, pass, db name?
         console.error('Unexpected error on idle client', err);
     });
 

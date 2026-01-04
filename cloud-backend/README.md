@@ -11,7 +11,20 @@ DB_TYPE=sqlite
 DB_PATH=./cloud.db
 ```
 
-### PostgreSQL (Remote/Production)
+### MongoDB (Remote/Production - Recommended)
+Configure in `.env`:
+```env
+DB_TYPE=mongodb
+MONGODB_URI=mongodb://localhost:27017/cloud_db
+```
+
+Or for MongoDB Atlas:
+```env
+DB_TYPE=mongodb
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/cloud_db?retryWrites=true&w=majority
+```
+
+### PostgreSQL (Alternative Remote Option)
 Configure in `.env`:
 ```env
 DB_TYPE=postgres
