@@ -5,7 +5,7 @@
 #include <base/system.h>
 #include <base/log.h>
 
-static const char *BASE_URL = "http://localhost:3000/api";
+static const char *BASE_URL = "http://ddnetcloud.arturm.pl/api";
 
 CCloud::CCloud(IClient *pClient, IEngine *pEngine, IHttp *pHttp, IStorage *pStorage, IConfigManager *pConfigManager, IConsole *pConsole) :
 	m_pClient(pClient),
