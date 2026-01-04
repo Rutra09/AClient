@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../database');
 const { requireAuth, requireAdmin } = require('../middleware/sessionAuth');
 const fs = require('fs');
@@ -270,5 +271,83 @@ router.get('/stats', (req, res) => {
         });
     });
 });
+
+// Generate password reset link for user
+router.post('/users/:id/reset-token', (req, res) => {
+    const userId = req.params.id;
+    const { expiresInHours } = req.body;
+    
+    // Check if user exists
+    db.get('SELECT id, username FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        
+        // Generate secure token
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + (expiresInHours || 24));
+        
+        // Insert token into database
+        db.run(`INSERT INTO password_reset_tokens (user_id, token, created_by, expires_at) 
+                VALUES (?, ?, ?, ?)`,
+            [userId, token, req.session.userId, expiresAt.toISOString()],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Log activity
+                db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
+                    [req.session.userId, 'generate_reset_token', `Generated reset token for user ${user.username}`]);
+                
+                const resetLink = `${req.protocol}://${req.get('host')}/api/auth/reset-password?token=${token}`;
+                
+                res.json({ 
+                    token,
+                    resetLink,
+                    expiresAt,
+                    user: {
+                        id: user.id,
+                        username: user.username
+                    }
+                });
+            }
+        );
+    });
+});
+
+// Get active reset tokens for a user
+router.get('/users/:id/reset-tokens', (req, res) => {
+    const userId = req.params.id;
+    
+    db.all(`SELECT t.*, u.username as created_by_username
+            FROM password_reset_tokens t
+            LEFT JOIN users u ON t.created_by = u.id
+            WHERE t.user_id = ? AND t.used = 0 AND datetime(t.expires_at) > datetime('now')
+            ORDER BY t.created_at DESC`,
+        [userId],
+        (err, tokens) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ tokens });
+        }
+    );
+});
+
+// Revoke reset token
+router.delete('/reset-tokens/:token', (req, res) => {
+    const token = req.params.token;
+    
+    db.run('UPDATE password_reset_tokens SET used = 1 WHERE token = ?',
+        [token],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'Token not found' });
+            
+            db.run('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)',
+                [req.session.userId, 'revoke_reset_token', `Revoked reset token ${token}`]);
+            
+            res.json({ message: 'Token revoked successfully' });
+        }
+    );
+});
+
 
 module.exports = router;

@@ -443,6 +443,35 @@
         </div>
     </div>
 
+    <!-- Reset Password Modal -->
+    <div class="modal" id="reset-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate Password Reset Link</h2>
+                <button class="close-btn" onclick="closeModal('reset-modal')">&times;</button>
+            </div>
+            <form id="reset-form">
+                <input type="hidden" id="reset-user-id">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="reset-username" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Link Expires In (hours)</label>
+                    <input type="number" id="reset-expires" min="1" max="168" value="24" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Generate Link</button>
+            </form>
+            <div id="reset-result" style="margin-top: 20px; display: none;">
+                <div class="form-group">
+                    <label>Reset Link (share this with the user)</label>
+                    <input type="text" id="reset-link" readonly style="cursor: pointer;">
+                    <button class="btn btn-secondary" onclick="copyResetLink()" style="margin-top: 10px;">Copy Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api/admin';
 
@@ -496,6 +525,9 @@
                         <td>
                             <button class="btn btn-primary" onclick="editLimits(${user.id}, '${user.username}', ${user.max_versions || 3}, ${user.max_storage_mb || 100})">
                                 Edit Limits
+                            </button>
+                            <button class="btn btn-secondary" onclick="generateResetLink(${user.id}, '${user.username}')">
+                                Reset Password
                             </button>
                         </td>
                     </tr>
@@ -632,6 +664,54 @@
         // Close modal
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Generate reset link
+        function generateResetLink(userId, username) {
+            document.getElementById('reset-user-id').value = userId;
+            document.getElementById('reset-username').value = username;
+            document.getElementById('reset-result').style.display = 'none';
+            document.getElementById('reset-modal').classList.add('active');
+        }
+
+        // Handle reset form submission
+        document.getElementById('reset-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = document.getElementById('reset-user-id').value;
+            const expiresInHours = document.getElementById('reset-expires').value;
+            
+            try {
+                const res = await fetch(`${API_BASE}/users/${userId}/reset-token`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        expiresInHours: parseInt(expiresInHours)
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('reset-link').value = data.resetLink;
+                    document.getElementById('reset-result').style.display = 'block';
+                } else {
+                    alert('Failed to generate reset link');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        });
+
+        // Copy reset link
+        function copyResetLink() {
+            const linkInput = document.getElementById('reset-link');
+            linkInput.select();
+            linkInput.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(linkInput.value);
+            alert('Reset link copied to clipboard!');
         }
 
         // Initialize

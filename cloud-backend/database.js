@@ -67,6 +67,22 @@ function initDb() {
             FOREIGN KEY (user_id) REFERENCES users (id)
         )`);
 
+        // Password reset tokens table
+        db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            created_by INTEGER,
+            used INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )`);
+
+        db.run(`CREATE INDEX IF NOT EXISTS idx_reset_tokens 
+                ON password_reset_tokens(token, used, expires_at)`);
+
         console.log('Database tables initialized with roles and activity logging');
     });
 }
